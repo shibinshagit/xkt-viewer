@@ -17,7 +17,7 @@ Quickly view your BIM models directly in your browser.
 ---
 ## 📷 Preview
 
-![xkt viewer screenshot](link-to-your-screenshot.png)
+![xkt viewer screenshot](img/preview.png)
 
 ---
 
