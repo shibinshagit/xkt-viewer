@@ -3,7 +3,7 @@
 Online viewer for `.xkt` models built with [xeokit](https://xeokit.io/)!  
 Quickly view your BIM models directly in your browser.
 
-🔗 **[Live Demo Here]([https://your-demo-link.com](https://xkt-viewer.vercel.app/))**
+🔗 **[Live Demo Here](https://your-demo-link.com](https://xkt-viewer.vercel.app/))**
 
 ---
 
@@ -22,7 +22,7 @@ Quickly view your BIM models directly in your browser.
 ---
 
 ## How to Use
-1. Open the [Live Demo]([https://your-demo-link.com](https://xkt-viewer.vercel.app/))
+1. Open the [Live Demo](https://your-demo-link.com](https://xkt-viewer.vercel.app/))
 2. Drag and drop your `.xkt` file
 3. Explore the model in 3D
 
