@@ -7,7 +7,6 @@
     <title>BIM Explorer Pro</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;700&display=swap">
     <style>
-        /* Existing CSS unchanged */
         :root {
             --primary: #00e5ff;
             --primary-dark: #00b8d4;
@@ -47,7 +46,6 @@
             background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
         }
 
-        /* Drop Zone */
         #dropZone {
             position: absolute;
             top: 0;
@@ -90,7 +88,6 @@
             letter-spacing: 2px;
         }
 
-        /* Initial Splash Screen */
         #splashScreen {
             position: absolute;
             top: 0;
@@ -165,7 +162,6 @@
             margin-right: 10px;
         }
 
-        /* NavCube */
         #myNavCubeCanvas {
             position: absolute;
             width: 150px;
@@ -184,7 +180,6 @@
             box-shadow: 0 0 25px rgba(0, 229, 255, 0.3);
         }
 
-        /* TreeView */
         #treeViewContainer {
             pointer-events: all;
             height: calc(100% - 120px);
@@ -307,7 +302,26 @@
             color: var(--primary);
         }
 
-        /* Toolbar */
+        /* Model-specific controls in tree view */
+        .model-controls {
+            display: inline-flex;
+            gap: 5px;
+            margin-left: 10px;
+        }
+
+        .model-controls button {
+            background: none;
+            border: none;
+            color: var(--light);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .model-controls button:hover {
+            color: var(--primary);
+        }
+
         #toolbar {
             position: absolute;
             top: 0;
@@ -396,7 +410,6 @@
             visibility: visible;
         }
 
-        /* Status Bar */
         #statusBar {
             position: absolute;
             bottom: 0;
@@ -457,12 +470,10 @@
             text-decoration: underline;
         }
 
-        /* File Input (hidden) */
         #fileInput {
             display: none;
         }
 
-        /* Loading Overlay */
         #loadingOverlay {
             position: absolute;
             top: 0;
@@ -524,7 +535,6 @@
             box-shadow: 0 0 10px var(--primary);
         }
 
-        /* Quick Actions Panel */
         #quickActions {
             position: absolute;
             right: 20px;
@@ -595,7 +605,6 @@
             visibility: visible;
         }
 
-        /* Info Panel */
         #infoPanel {
             position: absolute;
             left: 20px;
@@ -676,7 +685,6 @@
             }
         }
 
-        /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -696,7 +704,6 @@
             background: rgba(0, 229, 255, 0.5);
         }
 
-        /* Responsive adjustments */
         @media (max-width: 1024px) {
             #myNavCubeCanvas {
                 width: 120px;
@@ -951,7 +958,7 @@
             </div>
             <div class="stat">
                 <i class="fas fa-user"></i> 
-                Created by <a href="https://www.linkedin.com/in/shibinsha-connect" target="_blank" rel="noopener noreferrer">Shah</a>
+                Created by <a href="https://www.linkedin.com/in/shibinsha-connect" target="_blank" rel="noopener">Shah</a>
             </div>
         </div>
     </div>    
@@ -1019,7 +1026,7 @@
 
     const treeView = new TreeViewPlugin(viewer, {
         containerElement: document.getElementById("treeViewContent"),
-        autoExpandDepth: 3,
+        autoExpandDepth: 0, // Start fully collapsed
         hierarchy: "containment"
     });
 
@@ -1056,6 +1063,11 @@
     let showInfoEnabled = false;
     let lastTime = performance.now();
     let frameCount = 0;
+    let loadQueue = [];
+    let isLoading = false;
+    let loadedModels = 0;
+    let totalModelsToLoad = 0;
+    const BATCH_SIZE = 5; // Load 5 models at a time
 
     // Toggle tree view
     toggleTreeViewBtn.addEventListener('click', () => {
@@ -1073,10 +1085,12 @@
     resetViewBtn.addEventListener('click', () => {
         if (Object.keys(models).length > 0) {
             const combinedAABB = getCombinedAABB();
-            viewer.cameraFlight.flyTo({
-                aabb: combinedAABB,
-                duration: 0.5
-            });
+            if (combinedAABB) {
+                viewer.cameraFlight.flyTo({
+                    aabb: combinedAABB,
+                    duration: 0.5
+                });
+            }
         } else {
             viewer.camera.eye = [-2.56, 8.38, 8.27];
             viewer.camera.look = [13.44, 3.31, -14.83];
@@ -1092,7 +1106,7 @@
         }
         edgesEnabled = !edgesEnabled;
         Object.values(models).forEach(({ model }) => {
-            if (model) {
+            if (model && !model.destroyed) {
                 model.edges = edgesEnabled;
             }
         });
@@ -1108,7 +1122,7 @@
         }
         xrayEnabled = !xrayEnabled;
         Object.values(models).forEach(({ model }) => {
-            if (model) {
+            if (model && !model.destroyed) {
                 model.xrayed = xrayEnabled;
             }
         });
@@ -1146,10 +1160,12 @@
     zoomToFitBtn.addEventListener('click', () => {
         if (Object.keys(models).length > 0) {
             const combinedAABB = getCombinedAABB();
-            viewer.cameraFlight.flyTo({
-                aabb: combinedAABB,
-                duration: 0.5
-            });
+            if (combinedAABB) {
+                viewer.cameraFlight.flyTo({
+                    aabb: combinedAABB,
+                    duration: 0.5
+                });
+            }
         } else {
             setStatus('No models loaded', true);
         }
@@ -1168,13 +1184,15 @@
     // File handling
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            Array.from(e.target.files).forEach(file => {
-                if (file.name.toLowerCase().endsWith('.xkt')) {
-                    loadModelFromFile(file);
-                } else {
-                    setStatus(`Error: ${file.name} is not an XKT file`, true);
-                }
-            });
+            const files = Array.from(e.target.files).filter(file => file.name.toLowerCase().endsWith('.xkt'));
+            if (files.length === 0) {
+                setStatus('No valid XKT files selected', true);
+                return;
+            }
+            loadQueue.push(...files);
+            totalModelsToLoad += files.length;
+            updateModelName();
+            processLoadQueue();
             fileInput.value = null;
         }
     });
@@ -1200,99 +1218,123 @@
         dropZone.classList.remove('highlight');
 
         if (e.dataTransfer.files.length > 0) {
-            Array.from(e.dataTransfer.files).forEach(file => {
-                if (file.name.toLowerCase().endsWith('.xkt')) {
-                    loadModelFromFile(file);
-                } else {
-                    setStatus(`Error: ${file.name} is not an XKT file`, true);
-                }
-            });
+            const files = Array.from(e.dataTransfer.files).filter(file => file.name.toLowerCase().endsWith('.xkt'));
+            if (files.length === 0) {
+                setStatus('No valid XKT files dropped', true);
+                return;
+            }
+            loadQueue.push(...files);
+            totalModelsToLoad += files.length;
+            updateModelName();
+            processLoadQueue();
         }
     });
 
-    // Function to load model from File object
-    function loadModelFromFile(file) {
+    // Batch loading models
+    async function processLoadQueue() {
+        if (isLoading || loadQueue.length === 0) return;
+
+        isLoading = true;
         loadingOverlay.classList.add('visible');
-        loadingStatus.textContent = `Loading ${file.name}...`;
-        setStatus(`Loading ${file.name}...`);
+        splashScreen.classList.add('hidden');
 
-        loadingProgressBar.style.width = '0%';
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 5;
-            if (progress > 90) {
-                progress = 90;
+        const batch = loadQueue.splice(0, BATCH_SIZE);
+        const batchPromises = batch.map(file => loadModelFromFile(file));
+
+        try {
+            await Promise.all(batchPromises);
+            loadedModels += batch.length;
+            updateProgressBar();
+
+            if (loadQueue.length > 0) {
+                // Use setTimeout to allow UI updates and prevent blocking
+                setTimeout(processLoadQueue, 100);
+            } else {
+                isLoading = false;
+                setTimeout(() => {
+                    loadingOverlay.classList.remove('visible');
+                    setStatus(`${loadedModels} model${loadedModels !== 1 ? 's' : ''} loaded successfully`);
+                    loadedModels = 0;
+                    totalModelsToLoad = 0;
+                }, 500);
             }
-            loadingProgressBar.style.width = `${progress}%`;
-        }, 200);
-
-        if (Object.keys(models).length === 0) {
-            splashScreen.classList.add('hidden');
+        } catch (err) {
+            console.error('Batch loading error:', err);
+            setStatus('Error loading some models', true);
+            isLoading = false;
+            loadedModels = 0;
+            totalModelsToLoad = 0;
+            loadQueue = [];
+            loadingOverlay.classList.remove('visible');
         }
+    }
 
-        const modelId = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const arrayBuffer = event.target.result;
-            const t0 = performance.now();
+    // Load single model
+    function loadModelFromFile(file) {
+        return new Promise((resolve, reject) => {
+            loadingStatus.textContent = `Loading ${file.name}...`;
+            setStatus(`Loading ${file.name}...`);
 
-            try {
-                const model = xktLoader.load({
-                    id: modelId,
-                    xkt: arrayBuffer,
-                    edges: edgesEnabled,
-                    excludeUnclassifiedObjects: false
-                });
+            const modelId = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const reader = new FileReader();
 
-                models[modelId] = { model, fileName: file.name };
+            reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                const t0 = performance.now();
 
-                model.on("loaded", () => {
-                    const t1 = performance.now();
-                    const loadTime = ((t1 - t0) / 1000).toFixed(2);
-
-                    model.xrayed = xrayEnabled; // Apply current X-ray state
-                    updateModelName();
-                    updateObjectCount();
-                    setStatus(`Model ${file.name} loaded successfully`);
-
-                    clearInterval(progressInterval);
-                    loadingProgressBar.style.width = '100%';
-
-                    viewer.cameraFlight.flyTo({
-                        aabb: getCombinedAABB(),
-                        duration: 0.5
+                try {
+                    const model = xktLoader.load({
+                        id: modelId,
+                        xkt: arrayBuffer,
+                        edges: edgesEnabled,
+                        excludeUnclassifiedObjects: false
                     });
 
-                    setTimeout(() => {
-                        loadingOverlay.classList.remove('visible');
-                    }, 500);
-                });
+                    models[modelId] = { model, fileName: file.name };
 
-                model.on("error", (err) => {
-                    console.error(`Model loading error for ${file.name}:`, err);
-                    setStatus(`Error loading ${file.name}: ${err.message}`, true);
-                    delete models[modelId];
-                    updateModelName();
-                    updateObjectCount();
-                    clearInterval(progressInterval);
-                    loadingOverlay.classList.remove('visible');
-                });
+                    model.on("loaded", () => {
+                        const t1 = performance.now();
+                        model.xrayed = xrayEnabled;
+                        updateModelName();
+                        updateObjectCount();
+                        updateTreeViewNodes();
+                        viewer.cameraFlight.flyTo({
+                            aabb: getCombinedAABB(),
+                            duration: 0.5
+                        });
+                        resolve();
+                    });
 
-            } catch (err) {
-                console.error(`Error processing XKT file ${file.name}:`, err);
-                setStatus(`Error processing ${file.name}`, true);
-                clearInterval(progressInterval);
-                loadingOverlay.classList.remove('visible');
-            }
-        };
+                    model.on("error", (err) => {
+                        console.error(`Model loading error for ${file.name}:`, err);
+                        setStatus(`Error loading ${file.name}: ${err.message}`, true);
+                        delete models[modelId];
+                        updateModelName();
+                        updateObjectCount();
+                        updateTreeViewNodes();
+                        resolve(); // Continue with other models
+                    });
+                } catch (err) {
+                    console.error(`Error processing XKT file ${file.name}:`, err);
+                    setStatus(`Error processing ${file.name}`, true);
+                    resolve(); // Continue with other models
+                }
+            };
 
-        reader.onerror = () => {
-            setStatus(`Error reading ${file.name}`, true);
-            clearInterval(progressInterval);
-            loadingOverlay.classList.remove('visible');
-        };
+            reader.onerror = () => {
+                setStatus(`Error reading ${file.name}`, true);
+                resolve(); // Continue with other models
+            };
 
-        reader.readAsArrayBuffer(file);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // Update progress bar
+    function updateProgressBar() {
+        const progress = totalModelsToLoad > 0 ? (loadedModels / totalModelsToLoad) * 100 : 0;
+        loadingProgressBar.style.width = `${Math.min(progress, 100)}%`;
+        loadingStatus.textContent = `Loading ${loadedModels} of ${totalModelsToLoad} models...`;
     }
 
     // Mouse over entities to highlight them
@@ -1332,7 +1374,7 @@
         }
     });
 
-    // Update info panel with entity details
+    // Update info panel
     function updateInfoPanel(entity) {
         const metaObjects = viewer.metaScene.metaObjects;
         const metaObject = metaObjects ? metaObjects[entity.id] : null;
@@ -1418,6 +1460,7 @@
             }
         });
 
+        if (minX === Infinity) return null;
         return [minX, minY, minZ, maxX, maxY, maxZ];
     }
 
@@ -1425,6 +1468,9 @@
         const modelNames = Object.values(models).filter(m => m.model && !m.model.destroyed).map(m => m.fileName);
         if (modelNames.length === 0) {
             modelNameElement.innerHTML = `<span>BIM</span> Explorer Pro`;
+        } else if (modelNames.length > 3) {
+            modelNameElement.innerHTML = `<span>BIM</span> ${modelNames.length} models loaded`;
+            modelNameElement.title = modelNames.join(', '); // Show full list on hover
         } else {
             modelNameElement.innerHTML = `<span>BIM</span> ${modelNames.join(', ')}`;
         }
@@ -1435,6 +1481,60 @@
             .filter(m => m.model && !m.model.destroyed)
             .reduce((sum, { model }) => sum + (model.numEntities || 0), 0);
         objectCountElement.textContent = `${totalEntities} objects`;
+    }
+
+    // Custom tree view nodes for models
+    function updateTreeViewNodes() {
+        const container = document.getElementById('treeViewContent');
+        const modelList = Object.values(models).filter(m => m.model && !m.model.destroyed);
+
+        // Create custom model nodes
+        const ul = document.createElement('ul');
+        modelList.forEach(({ model, fileName }, index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span>${fileName}</span>
+                <span class="model-controls">
+                    <button class="toggle-model-visibility" data-model-id="${model.id}"><i class="fas fa-eye"></i></button>
+                    <button class="remove-model" data-model-id="${model.id}"><i class="fas fa-trash"></i></button>
+                </span>
+            `;
+            ul.appendChild(li);
+        });
+
+        // Insert at top of tree view
+        container.insertBefore(ul, container.firstChild);
+
+        // Attach event listeners
+        document.querySelectorAll('.toggle-model-visibility').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const modelId = e.currentTarget.dataset.modelId;
+                const modelData = models[modelId];
+                if (modelData && modelData.model && !modelData.model.destroyed) {
+                    modelData.model.visible = !modelData.model.visible;
+                    setStatus(`${modelData.fileName} ${modelData.model.visible ? 'shown' : 'hidden'}`);
+                }
+            });
+        });
+
+        document.querySelectorAll('.remove-model').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const modelId = e.currentTarget.dataset.modelId;
+                const modelData = models[modelId];
+                if (modelData && modelData.model && !modelData.model.destroyed) {
+                    modelData.model.destroy();
+                    delete models[modelId];
+                    updateModelName();
+                    updateObjectCount();
+                    updateTreeViewNodes();
+                    setStatus(`${modelData.fileName} removed`);
+                    if (Object.keys(models).length === 0) {
+                        splashScreen.classList.remove('hidden');
+                        treeView.clear();
+                    }
+                }
+            });
+        });
     }
 
     // Model management controls
@@ -1470,13 +1570,13 @@
             Object.keys(models).forEach(modelId => {
                 const { model } = models[modelId];
                 if (model && !model.destroyed) {
-                    model.destroy(); // Use destroy() instead of removeModel
+                    model.destroy();
                 }
-                delete models[modelId];
             });
             models = {};
             updateModelName();
             updateObjectCount();
+            updateTreeViewNodes();
             setStatus('All models removed');
             splashScreen.classList.remove('hidden');
             treeView.clear();
