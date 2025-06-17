@@ -1167,17 +1167,17 @@
         }
     });
 
-    // Toggle distance measurements
-    toggleDistanceMeasurementsBtn.addEventListener('click', () => {
-        if (Object.keys(models).length === 0) {
-            setStatus('No models loaded', true);
-            return;
-        }
-        distanceMeasurementsEnabled = !distanceMeasurementsEnabled;
-        distanceMeasurements.active = distanceMeasurementsEnabled;
-        toggleDistanceMeasurementsBtn.classList.toggle('active', distanceMeasurementsEnabled);
-        setStatus(`Distance measurements ${distanceMeasurementsEnabled ? 'enabled' : 'disabled'}`);
-    });
+    // // Toggle distance measurements
+    // toggleDistanceMeasurementsBtn.addEventListener('click', () => {
+    //     if (Object.keys(models).length === 0) {
+    //         setStatus('No models loaded', true);
+    //         return;
+    //     }
+    //     distanceMeasurementsEnabled = !distanceMeasurementsEnabled;
+    //     distanceMeasurements.active = distanceMeasurementsEnabled;
+    //     toggleDistanceMeasurementsBtn.classList.toggle('active', distanceMeasurementsEnabled);
+    //     setStatus(`Distance measurements ${distanceMeasurementsEnabled ? 'enabled' : 'disabled'}`);
+    // });
 
     // Close info panel
     closeInfoPanelBtn.addEventListener('click', () => {
