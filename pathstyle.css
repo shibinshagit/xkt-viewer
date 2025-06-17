@@ -1,0 +1,184 @@
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #myCanvas {
+           background-color: black;
+        }
+        #myNavCubeCanvas {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            filter: drop-shadow(0 0 8px #00ffcc);
+        }
+
+        #treeViewContainer {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            height: calc(100vh - 40px);
+            width: 320px;
+            background: rgba(10, 10, 10, 0.9);
+            border-right: 2px solid #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+            overflow-y: auto;
+            padding: 20px;
+            color: #00ffcc;
+            font-size: 14px;
+            user-select: none;
+            transition: transform 0.3s ease-in-out;
+            z-index: 1000;
+        }
+
+        #treeViewContainer.hidden {
+            transform: translateX(-100%);
+        }
+
+        #treeViewContainer ul {
+            list-style: none;
+            padding-left: 1.5rem;
+        }
+
+        #treeViewContainer ul li {
+            position: relative;
+            padding: 6px 0;
+        }
+
+        #treeViewContainer ul li a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            background: #ff00ff;
+            color: #000;
+            text-decoration: none;
+            position: absolute;
+            left: -1.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li a.plus {
+            background: #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        #treeViewContainer ul li a.minus {
+            background: #ff00ff;
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li span {
+            display: inline-block;
+            width: 100%;
+            padding: 4px 10px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            text-shadow: 0 0 5px #00ffcc;
+        }
+
+        #treeViewContainer ul li span:hover {
+            background: rgba(0, 255, 204, 0.2);
+            cursor: pointer;
+            transform: translateX(5px);
+        }
+
+        #treeViewContainer .highlighted-node {
+            background: rgba(255, 0, 255, 0.3);
+            color: #00ffcc;
+            border: 1px solid #ff00ff;
+            border-radius: 4px;
+            padding: 4px 10px;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1100;
+            background: #ff00ff;
+            color: #000;
+            padding: 10px;
+            border-radius: 8px;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView:hover {
+            background: #00ffcc;
+            box-shadow: 0 0 15px #00ffcc;
+            transform: scale(1.1);
+        }
+
+        #toggleTreeView.shifted {
+            left: 340px;
+        }
+        
+        #progressContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 10, 10, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            color: #00ffcc;
+            z-index: 1000;
+        }
+        
+        .progress-bar {
+            width: 200px;
+            height: 10px;
+            background: rgba(0, 255, 204, 0.2);
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            transition: width 0.3s ease;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 255, 204, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #00ffcc;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }

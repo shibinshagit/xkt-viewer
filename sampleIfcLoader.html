@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>xeokit Gaming Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #myNavCubeCanvas {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            filter: drop-shadow(0 0 8px #00ffcc);
+        }
+
+        #treeViewContainer {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            height: calc(100vh - 40px);
+            width: 320px;
+            background: rgba(10, 10, 10, 0.9);
+            border-right: 2px solid #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+            overflow-y: auto;
+            padding: 20px;
+            color: #00ffcc;
+            font-size: 14px;
+            user-select: none;
+            transition: transform 0.3s ease-in-out;
+            z-index: 1000;
+        }
+
+        #treeViewContainer.hidden {
+            transform: translateX(-100%);
+        }
+
+        #treeViewContainer ul {
+            list-style: none;
+            padding-left: 1.5rem;
+        }
+
+        #treeViewContainer ul li {
+            position: relative;
+            padding: 6px 0;
+        }
+
+        #treeViewContainer ul li a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            background: #ff00ff;
+            color: #000;
+            text-decoration: none;
+            position: absolute;
+            left: -1.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li a.plus {
+            background: #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        #treeViewContainer ul li a.minus {
+            background: #ff00ff;
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li span {
+            display: inline-block;
+            width: 100%;
+            padding: 4px 10px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            text-shadow: 0 0 5px #00ffcc;
+        }
+
+        #treeViewContainer ul li span:hover {
+            background: rgba(0, 255, 204, 0.2);
+            cursor: pointer;
+            transform: translateX(5px);
+        }
+
+        #treeViewContainer .highlighted-node {
+            background: rgba(255, 0, 255, 0.3);
+            color: #00ffcc;
+            border: 1px solid #ff00ff;
+            border-radius: 4px;
+            padding: 4px 10px;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1100;
+            background: #ff00ff;
+            color: #000;
+            padding: 10px;
+            border-radius: 8px;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView:hover {
+            background: #00ffcc;
+            box-shadow: 0 0 15px #00ffcc;
+            transform: scale(1.1);
+        }
+
+        #toggleTreeView.shifted {
+            left: 340px;
+        }
+
+        #time {
+            background: rgba(10, 10, 10, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            left: 50%;
+            border: 1px solid #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        #progressContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 10, 10, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            color: #00ffcc;
+            z-index: 1000;
+        }
+        
+        .progress-bar {
+            width: 200px;
+            height: 10px;
+            background: rgba(0, 255, 204, 0.2);
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            transition: width 0.3s ease;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 255, 204, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #00ffcc;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" class="w-full h-full fixed top-0 left-0"></canvas>
+    <canvas id="myNavCubeCanvas"></canvas>
+    <button id="toggleTreeView" class="hover:text-black">
+        <i class="fas fa-sitemap"></i>
+    </button>
+    <div id="treeViewContainer" class="hidden"></div>
+    <div id="time" class="fixed bottom-6 left-6 text-sm text-[#00ffcc]"></div>
+    
+    <div id="progressContainer">
+        <div>Loading Models: <span id="loadedCount">0</span>/<span id="totalCount">0</span></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="text-[#00ffcc] text-lg mb-2">Initializing WebIFC</div>
+        <div class="text-[#00ffcc] text-sm" id="initStatus">Please wait...</div>
+    </div>
+
+    <script type="module">
+      import { Viewer, WebIFCLoaderPlugin, NavCubePlugin, TreeViewPlugin } from "./dist/xeokit-sdk.min.es.js";
+      import * as WebIFC from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/web-ifc-api.js";
+  
+      const viewer = new Viewer({
+          canvasId: "myCanvas",
+          transparent: true
+      });
+  
+      viewer.camera.eye = [-3.933, 2.855, 27.018];
+      viewer.camera.look = [4.400, 3.724, 8.899];
+      viewer.camera.up = [-0.018, 0.999, 0.039];
+  
+      new NavCubePlugin(viewer, {
+          canvasId: "myNavCubeCanvas",
+          visible: true,
+          size: 200,
+          alignment: "bottomRight",
+          bottomMargin: 30,
+          rightMargin: 30
+      });
+  
+      const treeView = new TreeViewPlugin(viewer, {
+          containerElement: document.getElementById("treeViewContainer"),
+          autoExpandDepth: 3
+      });
+  
+      const toggleButton = document.getElementById("toggleTreeView");
+      const treeViewContainer = document.getElementById("treeViewContainer");
+  
+      toggleButton.addEventListener("click", () => {
+          treeViewContainer.classList.toggle("hidden");
+          toggleButton.classList.toggle("shifted");
+      });
+  
+      const IfcAPI = new WebIFC.IfcAPI();
+      IfcAPI.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.56/");
+  
+      const timeElement = document.getElementById("time");
+      const loadingOverlay = document.getElementById("loadingOverlay");
+      const initStatus = document.getElementById("initStatus");
+      const loadedCountElement = document.getElementById("loadedCount");
+      const totalCountElement = document.getElementById("totalCount");
+      const progressFill = document.getElementById("progressFill");
+      
+      initStatus.innerHTML = "Initializing WebIFC...";
+      const t0 = performance.now();
+  
+      IfcAPI.Init().then(() => {
+          const t1 = performance.now();
+          initStatus.innerHTML = `WebIFC initialized in ${((t1 - t0) / 1000).toFixed(2)} seconds`;
+          
+          // Remove loading overlay once initialization is complete
+          setTimeout(() => {
+              loadingOverlay.style.opacity = "0";
+              loadingOverlay.style.transition = "opacity 0.5s ease";
+              setTimeout(() => {
+                  loadingOverlay.style.display = "none";
+              }, 500);
+          }, 1000);
+          
+          timeElement.innerHTML = `WebIFC initialized in ${((t1 - t0) / 1000).toFixed(2)} seconds<br>Loading models...`;
+  
+          const ifcLoader = new WebIFCLoaderPlugin(viewer, {
+              WebIFC,
+              IfcAPI,
+              autoSimplify: true,
+              maxGeometryBatchSize: 500
+          });
+  
+          const models = [
+  { id: "ifcmodel1", src: "./src/IFC Models/ifcmodel1.ifc" },
+  { id: "ifcmodel2", src: "./src/IFC Models/ifcmodel2.ifc" },
+  { id: "ifcmodel3", src: "./src/IFC Models/ifcmodel3.ifc" },
+  { id: "ifcmodel4", src: "./src/IFC Models/ifcmodel4.ifc" },
+  { id: "ifcmodel5", src: "./src/IFC Models/ifcmodel5.ifc" },
+  { id: "ifcmodel6", src: "./src/IFC Models/ifcmodel6.ifc" },
+  { id: "ifcmodel7", src: "./src/IFC Models/ifcmodel7.ifc" },
+  { id: "ifcmodel8", src: "./src/IFC Models/ifcmodel8.ifc" },
+  { id: "ifcmodel9", src: "./src/IFC Models/ifcmodel9.ifc" },
+  { id: "ifcmodel10", src: "./src/IFC Models/ifcmodel10.ifc" },
+  { id: "ifcmodel11", src: "./src/IFC Models/ifcmodel11.ifc" },
+  { id: "ifcmodel12", src: "./src/IFC Models/ifcmodel12.ifc" },
+  { id: "ifcmodel13", src: "./src/IFC Models/ifcmodel13.ifc" },
+  { id: "ifcmodel14", src: "./src/IFC Models/ifcmodel14.ifc" },
+  { id: "ifcmodel15", src: "./src/IFC Models/ifcmodel15.ifc" },
+  { id: "ifcmodel16", src: "./src/IFC Models/ifcmodel16.ifc" },
+  { id: "ifcmodel17", src: "./src/IFC Models/ifcmodel17.ifc" },
+  { id: "ifcmodel18", src: "./src/IFC Models/ifcmodel18.ifc" },
+  { id: "ifcmodel19", src: "./src/IFC Models/ifcmodel19.ifc" },
+  { id: "ifcmodel20", src: "./src/IFC Models/ifcmodel20.ifc" },
+  { id: "ifcmodel21", src: "./src/IFC Models/ifcmodel21.ifc" },
+  { id: "ifcmodel22", src: "./src/IFC Models/ifcmodel22.ifc" },
+  { id: "ifcmodel23", src: "./src/IFC Models/ifcmodel23.ifc" },
+  { id: "ifcmodel24", src: "./src/IFC Models/ifcmodel24.ifc" },
+  { id: "ifcmodel25", src: "./src/IFC Models/ifcmodel25.ifc" },
+  { id: "ifcmodel26", src: "./src/IFC Models/ifcmodel26.ifc" },
+  { id: "ifcmodel27", src: "./src/IFC Models/ifcmodel27.ifc" },
+  { id: "ifcmodel28", src: "./src/IFC Models/ifcmodel28.ifc" },
+  { id: "ifcmodel29", src: "./src/IFC Models/ifcmodel29.ifc" },
+  { id: "ifcmodel30", src: "./src/IFC Models/ifcmodel30.ifc" },
+  { id: "ifcmodel31", src: "./src/IFC Models/ifcmodel31.ifc" },
+  { id: "ifcmodel32", src: "./src/IFC Models/ifcmodel32.ifc" },
+  { id: "ifcmodel33", src: "./src/IFC Models/ifcmodel33.ifc" },
+  { id: "ifcmodel34", src: "./src/IFC Models/ifcmodel34.ifc" },
+  { id: "ifcmodel35", src: "./src/IFC Models/ifcmodel35.ifc" },
+  { id: "ifcmodel36", src: "./src/IFC Models/ifcmodel36.ifc" },
+  { id: "ifcmodel37", src: "./src/IFC Models/ifcmodel37.ifc" },
+  { id: "ifcmodel38", src: "./src/IFC Models/ifcmodel38.ifc" },
+  { id: "ifcmodel39", src: "./src/IFC Models/ifcmodel39.ifc" },
+  { id: "ifcmodel40", src: "./src/IFC Models/ifcmodel40.ifc" },
+  { id: "ifcmodel41", src: "./src/IFC Models/ifcmodel41.ifc" },
+  { id: "ifcmodel42", src: "./src/IFC Models/ifcmodel42.ifc" },
+  { id: "ifcmodel43", src: "./src/IFC Models/ifcmodel43.ifc" },
+  { id: "ifcmodel44", src: "./src/IFC Models/ifcmodel44.ifc" },
+  { id: "ifcmodel45", src: "./src/IFC Models/ifcmodel45.ifc" },
+  { id: "ifcmodel46", src: "./src/IFC Models/ifcmodel46.ifc" },
+  { id: "ifcmodel47", src: "./src/IFC Models/ifcmodel47.ifc" },
+  { id: "ifcmodel48", src: "./src/IFC Models/ifcmodel48.ifc" },
+  { id: "ifcmodel49", src: "./src/IFC Models/ifcmodel49.ifc" },
+  { id: "ifcmodel50", src: "./src/IFC Models/ifcmodel50.ifc" },
+  { id: "ifcmodel51", src: "./src/IFC Models/ifcmodel51.ifc" },
+  { id: "ifcmodel52", src: "./src/IFC Models/ifcmodel52.ifc" },
+  { id: "ifcmodel53", src: "./src/IFC Models/ifcmodel53.ifc" },
+  { id: "ifcmodel54", src: "./src/IFC Models/ifcmodel54.ifc" },
+  { id: "ifcmodel55", src: "./src/IFC Models/ifcmodel55.ifc" },
+  { id: "ifcmodel56", src: "./src/IFC Models/ifcmodel56.ifc" },
+  { id: "ifcmodel57", src: "./src/IFC Models/ifcmodel57.ifc" },
+  { id: "ifcmodel58", src: "./src/IFC Models/ifcmodel58.ifc" },
+  { id: "ifcmodel59", src: "./src/IFC Models/ifcmodel59.ifc" },
+  { id: "ifcmodel60", src: "./src/IFC Models/ifcmodel60.ifc" },
+  { id: "ifcmodel61", src: "./src/IFC Models/ifcmodel61.ifc" },
+  { id: "ifcmodel62", src: "./src/IFC Models/ifcmodel62.ifc" },
+  { id: "ifcmodel63", src: "./src/IFC Models/ifcmodel63.ifc" },
+  { id: "ifcmodel64", src: "./src/IFC Models/ifcmodel64.ifc" },
+  { id: "ifcmodel65", src: "./src/IFC Models/ifcmodel65.ifc" },
+  { id: "ifcmodel66", src: "./src/IFC Models/ifcmodel66.ifc" },
+  { id: "ifcmodel67", src: "./src/IFC Models/ifcmodel67.ifc" },
+  { id: "ifcmodel68", src: "./src/IFC Models/ifcmodel68.ifc" },
+  { id: "ifcmodel69", src: "./src/IFC Models/ifcmodel69.ifc" },
+  { id: "ifcmodel70", src: "./src/IFC Models/ifcmodel70.ifc" },
+  { id: "ifcmodel71", src: "./src/IFC Models/ifcmodel71.ifc" },
+  { id: "ifcmodel72", src: "./src/IFC Models/ifcmodel72.ifc" },
+  { id: "ifcmodel73", src: "./src/IFC Models/ifcmodel73.ifc" },
+  { id: "ifcmodel74", src: "./src/IFC Models/ifcmodel74.ifc" },
+  { id: "ifcmodel75", src: "./src/IFC Models/ifcmodel75.ifc" },
+  { id: "ifcmodel76", src: "./src/IFC Models/ifcmodel76.ifc" },
+  { id: "ifcmodel77", src: "./src/IFC Models/ifcmodel77.ifc" },
+  { id: "ifcmodel78", src: "./src/IFC Models/ifcmodel78.ifc" },
+  { id: "ifcmodel79", src: "./src/IFC Models/ifcmodel79.ifc" },
+  { id: "ifcmodel80", src: "./src/IFC Models/ifcmodel80.ifc" },
+  { id: "ifcmodel81", src: "./src/IFC Models/ifcmodel81.ifc" },
+  { id: "ifcmodel82", src: "./src/IFC Models/ifcmodel82.ifc" },
+  { id: "ifcmodel83", src: "./src/IFC Models/ifcmodel83.ifc" },
+  { id: "ifcmodel84", src: "./src/IFC Models/ifcmodel84.ifc" },
+  { id: "ifcmodel85", src: "./src/IFC Models/ifcmodel85.ifc" },
+  { id: "ifcmodel86", src: "./src/IFC Models/ifcmodel86.ifc" },
+  { id: "ifcmodel87", src: "./src/IFC Models/ifcmodel87.ifc" },
+  { id: "ifcmodel88", src: "./src/IFC Models/ifcmodel88.ifc" },
+  { id: "ifcmodel89", src: "./src/IFC Models/ifcmodel89.ifc" },
+  { id: "ifcmodel90", src: "./src/IFC Models/ifcmodel90.ifc" },
+  { id: "ifcmodel91", src: "./src/IFC Models/ifcmodel91.ifc" },
+  { id: "ifcmodel92", src: "./src/IFC Models/ifcmodel92.ifc" },
+  { id: "ifcmodel93", src: "./src/IFC Models/ifcmodel93.ifc" },
+  { id: "ifcmodel94", src: "./src/IFC Models/ifcmodel94.ifc" },
+  { id: "ifcmodel95", src: "./src/IFC Models/ifcmodel95.ifc" },
+  { id: "ifcmodel96", src: "./src/IFC Models/ifcmodel96.ifc" },
+  { id: "ifcmodel97", src: "./src/IFC Models/ifcmodel97.ifc" },
+  { id: "ifcmodel98", src: "./src/IFC Models/ifcmodel98.ifc" },
+  { id: "ifcmodel99", src: "./src/IFC Models/ifcmodel99.ifc" },
+  { id: "ifcmodel100", src: "./src/IFC Models/ifcmodel100.ifc" }
+];
+  
+          // Update total count in the UI
+          totalCountElement.textContent = models.length;
+          
+          let loadedModels = 0;
+          const loadReports = [];
+          let firstModelLoaded = false;
+          
+          // Function to update progress
+          const updateProgress = () => {
+              loadedCountElement.textContent = loadedModels;
+              const percentage = (loadedModels / models.length) * 100;
+              progressFill.style.width = `${percentage}%`;
+          };
+  
+          // Load each model with a small delay between them to prevent browser freezing
+          const loadModelSequentially = (index) => {
+              if (index >= models.length) return;
+              
+              const model = models[index];
+              const startTime = performance.now();
+              
+              const sceneModel = ifcLoader.load({
+                  id: model.id,
+                  src: model.src,
+                  loadMetadata: false,
+                  excludeTypes: ["IfcSpace", "IfcOpeningElement"],
+                  edges: false
+              });
+  
+              sceneModel.on("loaded", () => {
+                  const endTime = performance.now();
+                  const loadTime = (endTime - startTime) / 1000;
+                  loadReports.push(`${model.id}: ${loadTime.toFixed(3)} seconds`);
+                  loadedModels++;
+                  
+                  // Update the loading status display
+                  timeElement.innerHTML = `
+                      <strong>Loading Report:</strong><br>
+                      ${loadReports.map(report => `• ${report}`).join("<br>")}<br>
+                      <strong>Summary:</strong><br>
+                      Loaded ${loadedModels}/${models.length} models<br>
+                      Total Objects: ${viewer.scene.numEntities}
+                  `;
+                  
+                  updateProgress();
+                  
+                  // For the first loaded model, focus the camera on it
+                  if (!firstModelLoaded) {
+                      viewer.cameraFlight.flyTo(sceneModel);
+                      firstModelLoaded = true;
+                  }
+                  
+                  // Load the next model
+                  setTimeout(() => {
+                      loadModelSequentially(index + 1);
+                  }, 100); // Small delay between model loads
+              });
+              
+              // Handle error if the model fails to load
+              sceneModel.on("error", (err) => {
+                  console.error(`Failed to load ${model.id}:`, err);
+                  loadReports.push(`${model.id}: Failed to load`);
+                  
+                  // Still increment counter and move to next model
+                  loadedModels++;
+                  updateProgress();
+                  
+                  setTimeout(() => {
+                      loadModelSequentially(index + 1);
+                  }, 100);
+              });
+          };
+          
+          // Start loading models in sequence
+          loadModelSequentially(0);
+      }).catch(error => {
+          console.error("Error initializing WebIFC:", error);
+          initStatus.innerHTML = `Error initializing WebIFC: ${error.message}`;
+      });
+  </script>
+</body>
+</html>

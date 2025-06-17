@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>xeokit Example</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0f0f0f;
+            color: #00ffcc;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
+            border: 2px solid #00ffcc;
+            box-shadow: 0 0 20px #00ffcc;
+        }
+    </style>
+</head>
+<body>
+<canvas id="myCanvas"></canvas>
+</body>
+<script type="module">
+    import {Viewer, XKTLoaderPlugin} from "./xeokit-sdk.min.es.js";
+
+    const viewer = new Viewer({
+        canvasId: "myCanvas",
+        transparent: true
+    });
+
+    viewer.camera.eye = [-3.93, 2.85, 27.01];
+    viewer.camera.look = [4.40, 3.72, 8.89];
+    viewer.camera.up = [-0.01, 0.99, 0.039];
+
+    // Track open/closed state for each object
+    const objectStates = new Map(); // Map<entityId, {isOpen: boolean, originalPosition: number[]}>
+
+    // Handle object click to slide open/close
+    viewer.cameraControl.on("picked", pickResult => {
+        if (pickResult.entity) {
+            const entity = pickResult.entity;
+            const entityId = entity.id;
+
+            // Highlight the entity
+            entity.highlighted = true;
+
+            // Initialize state if not exists
+            if (!objectStates.has(entityId)) {
+                objectStates.set(entityId, {
+                    isOpen: false,
+                    originalPosition: entity.position.slice() // Copy initial position
+                });
+            }
+
+            const state = objectStates.get(entityId);
+            const slideDistance = 2.0; // Distance to slide (adjust based on model scale)
+            const duration = 1000; // Animation duration in milliseconds
+
+            // Toggle open/close
+            const targetX = state.isOpen
+                ? state.originalPosition[0] // Slide back to original position
+                : state.originalPosition[0] - slideDistance; // Slide left
+            const startX = entity.position[0];
+            const startTime = performance.now();
+
+            // Animation function
+            function animate() {
+                const currentTime = performance.now();
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1); // 0 to 1
+
+                // Linear interpolation
+                entity.position = [
+                    startX + (targetX - startX) * progress,
+                    entity.position[1],
+                    entity.position[2]
+                ];
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Update state when animation completes
+                    state.isOpen = !state.isOpen;
+                    entity.highlighted = false; // Remove highlight
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+    });
+
+    const xktLoader = new XKTLoaderPlugin(viewer);
+
+    const sceneModel = xktLoader.load({
+        id: "myModel",
+        src: "./Duplex.xkt",
+        edges: true
+    });
+</script>
+</html>

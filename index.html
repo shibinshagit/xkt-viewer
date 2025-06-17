@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -7,6 +7,7 @@
     <title>BIM Explorer Pro</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;700&display=swap">
     <style>
+        /* Existing CSS unchanged */
         :root {
             --primary: #00e5ff;
             --primary-dark: #00b8d4;
@@ -226,6 +227,11 @@
             margin: 0;
             text-transform: uppercase;
             letter-spacing: 1px;
+        }
+
+        #treeViewHeader div {
+            display: flex;
+            gap: 10px;
         }
 
         #treeViewHeader button {
@@ -848,32 +854,27 @@
                 font-size: 0.9rem;
             }
             
-            /* Hide creator credit on very small screens */
             #stats .stat:last-child {
                 display: none;
             }
         }
     </style>
-    <!-- Font Awesome -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </head>
 <body>
-    <!-- Main Canvas -->
     <canvas id="myCanvas"></canvas>
-    
-    <!-- NavCube Canvas -->
     <canvas id="myNavCubeCanvas"></canvas>
-    
-    <!-- TreeView -->
     <div id="treeViewContainer">
         <div id="treeViewHeader">
             <h3>Model Structure</h3>
-            <button id="closeTreeView"><i class="fas fa-times"></i></button>
+            <div>
+                <button id="toggleAllModels"><i class="fas fa-eye"></i></button>
+                <button id="removeAllModels"><i class="fas fa-trash"></i></button>
+                <button id="closeTreeView"><i class="fas fa-times"></i></button>
+            </div>
         </div>
         <div id="treeViewContent"></div>
     </div>
-    
-    <!-- Toolbar -->
     <div id="toolbar">
         <button id="toggleTreeView" class="toolbar-button">
             <i class="fas fa-sitemap"></i>
@@ -901,21 +902,16 @@
             <span class="tooltip">Open XKT File</span>
         </button>
     </div>
-    
-    <!-- Quick Actions Panel -->
     <div id="quickActions">
         <button class="quick-action" id="zoomToFit">
             <i class="fas fa-expand"></i>
             <span class="tooltip">Zoom to Fit</span>
         </button>
-
         <button class="quick-action" id="takeScreenshot">
             <i class="fas fa-camera"></i>
             <span class="tooltip">Screenshot</span>
         </button>
     </div>
-    
-    <!-- Info Panel -->
     <div id="infoPanel">
         <h3>
             Element Information
@@ -940,8 +936,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Status Bar -->
     <div id="statusBar">
         <div id="status">
             <i class="fas fa-circle"></i> Ready
@@ -961,21 +955,15 @@
             </div>
         </div>
     </div>    
-    
-    <!-- Splash Screen -->
     <div id="splashScreen">
         <div id="logo">BIM <span>XKT Viewer</span></div>
         <p>xkt model loader for xeokit</p>
         <button id="uploadButton"><i class="fas fa-file-upload"></i> Load XKT Model</button>
     </div>
-    
-    <!-- Drop Zone (initially hidden) -->
     <div id="dropZone">
         <i class="fas fa-cloud-upload-alt"></i>
         <p>Drop your XKT file here</p>
     </div>
-    
-    <!-- Loading Overlay -->
     <div id="loadingOverlay">
         <div class="spinner"></div>
         <p id="loadingStatus">Loading model...</p>
@@ -983,54 +971,37 @@
             <div id="loadingProgressBar"></div>
         </div>
     </div>
-    
-    <!-- Hidden File Input -->
-    <input type="file" id="fileInput" accept=".xkt" />
-
+    <input type="file" id="fileInput" accept=".xkt" multiple />
 <script type="module">
-    //------------------------------------------------------------------------------------------------------------------
-    // Import the modules we need for this example
-    //------------------------------------------------------------------------------------------------------------------
-    
-    import {Viewer, XKTLoaderPlugin, NavCubePlugin, TreeViewPlugin, AxisGizmoPlugin} from "./xeokit-sdk.min.es.js";
-    
-    //------------------------------------------------------------------------------------------------------------------
-    // Create a Viewer, arrange the camera, tweak x-ray and highlight materials
-    //------------------------------------------------------------------------------------------------------------------
-    
+    import {Viewer, XKTLoaderPlugin, NavCubePlugin, TreeViewPlugin} from "./xeokit-sdk.min.es.js";
+
     const viewer = new Viewer({
         canvasId: "myCanvas",
         transparent: true
     });
-    
+
     const cameraControl = viewer.cameraControl;
     const scene = viewer.scene;
     const cameraFlight = viewer.cameraFlight;
-    
+
     cameraControl.followPointer = true;
     cameraFlight.duration = 0.8;
     cameraFlight.fitFOV = 25;
-    
-    // Default camera position
+
     viewer.camera.eye = [-2.56, 8.38, 8.27];
     viewer.camera.look = [13.44, 3.31, -14.83];
     viewer.camera.up = [0.10, 0.98, -0.14];
-    
-    // Configure materials
+
     viewer.scene.xrayMaterial.fillAlpha = 0.1;
     viewer.scene.xrayMaterial.fillColor = [0, 0, 0];
     viewer.scene.xrayMaterial.edgeAlpha = 0.4;
     viewer.scene.xrayMaterial.edgeColor = [0, 229, 255];
-    
+
     viewer.scene.highlightMaterial.fill = true;
     viewer.scene.highlightMaterial.fillAlpha = 0.3;
     viewer.scene.highlightMaterial.fillColor = [0, 229, 255];
     viewer.scene.highlightMaterial.edgeColor = [0, 229, 255];
-    
-    //------------------------------------------------------------------------------------------------------------------
-    // Create a NavCube
-    //------------------------------------------------------------------------------------------------------------------
-    
+
     const navCube = new NavCubePlugin(viewer, {
         canvasId: "myNavCubeCanvas",
         visible: true,
@@ -1045,22 +1016,13 @@
         topColor: "#ff1744",
         bottomColor: "#d50000"
     });
-    
-    //------------------------------------------------------------------------------------------------------------------
-    // Create an IFC structure tree view
-    //------------------------------------------------------------------------------------------------------------------
-    
+
     const treeView = new TreeViewPlugin(viewer, {
         containerElement: document.getElementById("treeViewContent"),
-        autoExpandDepth: 3, // Initially expand tree three levels deep
+        autoExpandDepth: 3,
         hierarchy: "containment"
     });
-    
-    //------------------------------------------------------------------------------------------------------------------
-    // Initialize interfaces
-    //------------------------------------------------------------------------------------------------------------------
-    
-    // DOM Elements
+
     const dropZone = document.getElementById('dropZone');
     const splashScreen = document.getElementById('splashScreen');
     const fileInput = document.getElementById('fileInput');
@@ -1083,115 +1045,116 @@
     const infoPanel = document.getElementById('infoPanel');
     const closeInfoPanelBtn = document.getElementById('closeInfoPanel');
     const infoPanelContent = document.getElementById('infoPanelContent');
-    
-    // Quick action buttons
     const zoomToFitBtn = document.getElementById('zoomToFit');
     const takeScreenshotBtn = document.getElementById('takeScreenshot');
-    
-    // Create XKT loader
+
     const xktLoader = new XKTLoaderPlugin(viewer);
-    
-    // Viewer state
-    let currentModel = null;
+
+    let models = {};
     let edgesEnabled = true;
     let xrayEnabled = false;
-    let wireframeEnabled = false;
-    let gridEnabled = false;
     let showInfoEnabled = false;
-    
-    // FPS counter
     let lastTime = performance.now();
     let frameCount = 0;
-    
-    //------------------------------------------------------------------------------------------------------------------
-    // UI Controls
-    //------------------------------------------------------------------------------------------------------------------
-    
+
     // Toggle tree view
     toggleTreeViewBtn.addEventListener('click', () => {
         treeViewContainer.classList.toggle('visible');
         toggleTreeViewBtn.classList.toggle('active');
     });
-    
+
     // Close tree view
     closeTreeViewBtn.addEventListener('click', () => {
         treeViewContainer.classList.remove('visible');
         toggleTreeViewBtn.classList.remove('active');
     });
-    
+
     // Reset view
     resetViewBtn.addEventListener('click', () => {
-        if (currentModel) {
+        if (Object.keys(models).length > 0) {
+            const combinedAABB = getCombinedAABB();
             viewer.cameraFlight.flyTo({
-                aabb: currentModel.aabb,
+                aabb: combinedAABB,
                 duration: 0.5
             });
         } else {
-            // Default view if no model
             viewer.camera.eye = [-2.56, 8.38, 8.27];
             viewer.camera.look = [13.44, 3.31, -14.83];
             viewer.camera.up = [0.10, 0.98, -0.14];
         }
     });
-    
-    // Toggle edges
+
+    // Toggle edges for all models
     toggleEdgesBtn.addEventListener('click', () => {
-        if (!currentModel) return;
-        
+        if (Object.keys(models).length === 0) {
+            setStatus('No models loaded', true);
+            return;
+        }
         edgesEnabled = !edgesEnabled;
-        currentModel.edges = edgesEnabled;
-        
+        Object.values(models).forEach(({ model }) => {
+            if (model) {
+                model.edges = edgesEnabled;
+            }
+        });
         toggleEdgesBtn.classList.toggle('active', edgesEnabled);
+        setStatus(`Edges ${edgesEnabled ? 'enabled' : 'disabled'}`);
     });
-    
-    // Toggle X-ray mode
+
+    // Toggle X-ray mode for all models
     toggleXrayBtn.addEventListener('click', () => {
-        if (!currentModel) return;
-        
+        if (Object.keys(models).length === 0) {
+            setStatus('No models loaded', true);
+            return;
+        }
         xrayEnabled = !xrayEnabled;
-        currentModel.xrayed = xrayEnabled;
-        
+        Object.values(models).forEach(({ model }) => {
+            if (model) {
+                model.xrayed = xrayEnabled;
+            }
+        });
         toggleXrayBtn.classList.toggle('active', xrayEnabled);
+        setStatus(`X-ray ${xrayEnabled ? 'enabled' : 'disabled'}`);
     });
-    
+
     // Toggle info panel
     toggleInfoBtn.addEventListener('click', () => {
         showInfoEnabled = !showInfoEnabled;
         toggleInfoBtn.classList.toggle('active', showInfoEnabled);
-        
         if (!showInfoEnabled) {
             infoPanel.classList.remove('visible');
         }
     });
-    
+
     // Close info panel
     closeInfoPanelBtn.addEventListener('click', () => {
         infoPanel.classList.remove('visible');
         showInfoEnabled = false;
         toggleInfoBtn.classList.remove('active');
     });
-    
+
     // Open file button
     openFileBtn.addEventListener('click', () => {
         fileInput.click();
     });
-    
+
     // Upload button in splash screen
     uploadButton.addEventListener('click', () => {
         fileInput.click();
     });
-    
-    // Zoom to fit
+
+    // Zoom to fit all models
     zoomToFitBtn.addEventListener('click', () => {
-        if (currentModel) {
+        if (Object.keys(models).length > 0) {
+            const combinedAABB = getCombinedAABB();
             viewer.cameraFlight.flyTo({
-                aabb: currentModel.aabb,
+                aabb: combinedAABB,
                 duration: 0.5
             });
+        } else {
+            setStatus('No models loaded', true);
         }
     });
-    
-    
+
     // Take screenshot
     takeScreenshotBtn.addEventListener('click', () => {
         const canvas = document.getElementById('myCanvas');
@@ -1199,178 +1162,158 @@
         link.download = 'bim-explorer-screenshot.png';
         link.href = canvas.toDataURL('image/png');
         link.click();
-        
         setStatus('Screenshot saved');
     });
-    
-    //------------------------------------------------------------------------------------------------------------------
+
     // File handling
-    //------------------------------------------------------------------------------------------------------------------
-    
-    // Process the selected file
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            const file = e.target.files[0];
-            loadModelFromFile(file);
-            fileInput.value = null; // Reset for reloading same file
+            Array.from(e.target.files).forEach(file => {
+                if (file.name.toLowerCase().endsWith('.xkt')) {
+                    loadModelFromFile(file);
+                } else {
+                    setStatus(`Error: ${file.name} is not an XKT file`, true);
+                }
+            });
+            fileInput.value = null;
         }
     });
-    
+
     // Drag and drop functionality
     document.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('active');
-        if (e.dataTransfer.items[0].kind === 'file') {
+        if (e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].kind === 'file') {
             dropZone.classList.add('highlight');
         }
     });
-    
+
     document.addEventListener('dragleave', (e) => {
         e.preventDefault();
         dropZone.classList.remove('active');
         dropZone.classList.remove('highlight');
     });
-    
+
     document.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('active');
         dropZone.classList.remove('highlight');
-        
+
         if (e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            if (file.name.toLowerCase().endsWith('.xkt')) {
-                loadModelFromFile(file);
-            } else {
-                setStatus('Error: Only XKT files are supported', true);
-            }
+            Array.from(e.dataTransfer.files).forEach(file => {
+                if (file.name.toLowerCase().endsWith('.xkt')) {
+                    loadModelFromFile(file);
+                } else {
+                    setStatus(`Error: ${file.name} is not an XKT file`, true);
+                }
+            });
         }
     });
-    
+
     // Function to load model from File object
     function loadModelFromFile(file) {
-        // Clear previous model if exists
-        if (currentModel) {
-            viewer.scene.removeModel(currentModel.id);
-            currentModel = null;
-        }
-        
-        // Show loading overlay
         loadingOverlay.classList.add('visible');
         loadingStatus.textContent = `Loading ${file.name}...`;
         setStatus(`Loading ${file.name}...`);
-        
-        // Reset progress bar
+
         loadingProgressBar.style.width = '0%';
-        
-        // Simulate progress (since we don't have actual progress events)
         let progress = 0;
         const progressInterval = setInterval(() => {
             progress += Math.random() * 5;
             if (progress > 90) {
-                progress = 90; // Cap at 90% until actual load completes
+                progress = 90;
             }
             loadingProgressBar.style.width = `${progress}%`;
         }, 200);
-        
-        // Hide splash screen
-        splashScreen.classList.add('hidden');
-        
-        // Update model name
-        modelNameElement.innerHTML = `<span>BIM</span> ${file.name}`;
-        
-        // Read the file
+
+        if (Object.keys(models).length === 0) {
+            splashScreen.classList.add('hidden');
+        }
+
+        const modelId = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const reader = new FileReader();
         reader.onload = (event) => {
             const arrayBuffer = event.target.result;
-
             const t0 = performance.now();
-            
+
             try {
-                // Load the model
-                currentModel = xktLoader.load({
-                    id: "model",
+                const model = xktLoader.load({
+                    id: modelId,
                     xkt: arrayBuffer,
                     edges: edgesEnabled,
                     excludeUnclassifiedObjects: false
                 });
-                
-                // Handle model loading events
-                currentModel.on("loaded", () => {
+
+                models[modelId] = { model, fileName: file.name };
+
+                model.on("loaded", () => {
                     const t1 = performance.now();
                     const loadTime = ((t1 - t0) / 1000).toFixed(2);
-                    
-                    // Update UI
-                    objectCountElement.textContent = `${currentModel.numEntities} objects`;
-                    setStatus('Model loaded successfully');
-                    
-                    // Complete progress bar
+
+                    model.xrayed = xrayEnabled; // Apply current X-ray state
+                    updateModelName();
+                    updateObjectCount();
+                    setStatus(`Model ${file.name} loaded successfully`);
+
                     clearInterval(progressInterval);
                     loadingProgressBar.style.width = '100%';
-                    
-                    // Set default states for toggle buttons
-                    toggleEdgesBtn.classList.toggle('active', edgesEnabled);
-                    toggleXrayBtn.classList.toggle('active', xrayEnabled);
-                    
-                    // Fit to view
+
                     viewer.cameraFlight.flyTo({
-                        aabb: currentModel.aabb,
+                        aabb: getCombinedAABB(),
                         duration: 0.5
                     });
-                    
-                    // Hide loading overlay after a short delay
+
                     setTimeout(() => {
                         loadingOverlay.classList.remove('visible');
                     }, 500);
                 });
-                
-                currentModel.on("error", (err) => {
-                    console.error('Model loading error:', err);
-                    setStatus('Error loading model: ' + err.message, true);
+
+                model.on("error", (err) => {
+                    console.error(`Model loading error for ${file.name}:`, err);
+                    setStatus(`Error loading ${file.name}: ${err.message}`, true);
+                    delete models[modelId];
+                    updateModelName();
+                    updateObjectCount();
                     clearInterval(progressInterval);
                     loadingOverlay.classList.remove('visible');
                 });
-                
+
             } catch (err) {
-                console.error('Error processing XKT file:', err);
-                setStatus('Error processing XKT file', true);
+                console.error(`Error processing XKT file ${file.name}:`, err);
+                setStatus(`Error processing ${file.name}`, true);
                 clearInterval(progressInterval);
                 loadingOverlay.classList.remove('visible');
             }
         };
-        
+
         reader.onerror = () => {
-            setStatus('Error reading file', true);
+            setStatus(`Error reading ${file.name}`, true);
             clearInterval(progressInterval);
             loadingOverlay.classList.remove('visible');
         };
-        
+
         reader.readAsArrayBuffer(file);
     }
-    
-    //------------------------------------------------------------------------------------------------------------------
+
     // Mouse over entities to highlight them
-    //------------------------------------------------------------------------------------------------------------------
-    
     let lastEntity = null;
-    
+
     viewer.scene.input.on("mousemove", (coords) => {
         const hit = viewer.scene.pick({
             canvasPos: coords
         });
-        
+
         if (hit) {
             if (!lastEntity || hit.entity.id !== lastEntity.id) {
                 if (lastEntity) {
                     lastEntity.highlighted = false;
                 }
-                
+
                 lastEntity = hit.entity;
                 hit.entity.highlighted = true;
-                
-                // Show info in status bar
+
                 setStatus(`Entity: ${hit.entity.id}`);
-                
-                // Update info panel if enabled
+
                 if (showInfoEnabled) {
                     updateInfoPanel(hit.entity);
                     infoPanel.classList.add('visible');
@@ -1381,36 +1324,31 @@
                 lastEntity.highlighted = false;
                 lastEntity = null;
                 setStatus('Ready');
-                
-                // Hide info panel if no entity is selected
+
                 if (showInfoEnabled) {
                     infoPanel.classList.remove('visible');
                 }
             }
         }
     });
-    
+
     // Update info panel with entity details
     function updateInfoPanel(entity) {
         const metaObjects = viewer.metaScene.metaObjects;
         const metaObject = metaObjects ? metaObjects[entity.id] : null;
-        
+
         let html = '';
-        
-        // Basic properties
         html += `<div class="info-row">
                     <div class="info-label">ID</div>
                     <div class="info-value">${entity.id}</div>
                 </div>`;
-        
-        // Add metadata if available
+
         if (metaObject) {
             html += `<div class="info-row">
                         <div class="info-label">Type</div>
                         <div class="info-value">${metaObject.type || '-'}</div>
                     </div>`;
-            
-            // Add other properties from metaObject
+
             if (metaObject.properties) {
                 for (const key in metaObject.properties) {
                     if (key !== 'id' && key !== 'type') {
@@ -1422,25 +1360,21 @@
                 }
             }
         } else {
-            // Fallback if no metadata
             html += `<div class="info-row">
                         <div class="info-label">Type</div>
                         <div class="info-value">Unknown</div>
                     </div>`;
         }
-        
+
         infoPanelContent.innerHTML = html;
     }
-    
-    //------------------------------------------------------------------------------------------------------------------
+
     // FPS counter
-    //------------------------------------------------------------------------------------------------------------------
-    
     viewer.scene.on("tick", () => {
         frameCount++;
         const now = performance.now();
         const elapsed = now - lastTime;
-        
+
         if (elapsed >= 1000) {
             const fps = Math.round((frameCount * 1000) / elapsed);
             fpsCounterElement.textContent = `${fps} FPS`;
@@ -1448,12 +1382,8 @@
             lastTime = now;
         }
     });
-    
-    //------------------------------------------------------------------------------------------------------------------
+
     // Helper functions
-    //------------------------------------------------------------------------------------------------------------------
-    
-    // Set status message
     function setStatus(message, isError = false) {
         statusElement.innerHTML = `<i class="fas fa-${isError ? 'exclamation-circle' : 'circle'}"></i> ${message}`;
         if (isError) {
@@ -1466,6 +1396,94 @@
             statusElement.style.color = '';
         }
     }
+
+    function getCombinedAABB() {
+        const modelList = Object.values(models).filter(m => m.model && !m.model.destroyed);
+        if (modelList.length === 0) {
+            return null;
+        }
+
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+        modelList.forEach(({ model }) => {
+            if (model && model.aabb) {
+                const aabb = model.aabb;
+                minX = Math.min(minX, aabb[0]);
+                minY = Math.min(minY, aabb[1]);
+                minZ = Math.min(minZ, aabb[2]);
+                maxX = Math.max(maxX, aabb[3]);
+                maxY = Math.max(maxY, aabb[4]);
+                maxZ = Math.max(maxZ, aabb[5]);
+            }
+        });
+
+        return [minX, minY, minZ, maxX, maxY, maxZ];
+    }
+
+    function updateModelName() {
+        const modelNames = Object.values(models).filter(m => m.model && !m.model.destroyed).map(m => m.fileName);
+        if (modelNames.length === 0) {
+            modelNameElement.innerHTML = `<span>BIM</span> Explorer Pro`;
+        } else {
+            modelNameElement.innerHTML = `<span>BIM</span> ${modelNames.join(', ')}`;
+        }
+    }
+
+    function updateObjectCount() {
+        const totalEntities = Object.values(models)
+            .filter(m => m.model && !m.model.destroyed)
+            .reduce((sum, { model }) => sum + (model.numEntities || 0), 0);
+        objectCountElement.textContent = `${totalEntities} objects`;
+    }
+
+    // Model management controls
+    function updateTreeViewHeader() {
+        const header = document.getElementById('treeViewHeader');
+        header.innerHTML = `
+            <h3>Model Structure</h3>
+            <div>
+                <button id="toggleAllModels"><i class="fas fa-eye"></i></button>
+                <button id="removeAllModels"><i class="fas fa-trash"></i></button>
+                <button id="closeTreeView"><i class="fas fa-times"></i></button>
+            </div>
+        `;
+
+        document.getElementById('closeTreeView').addEventListener('click', () => {
+            treeViewContainer.classList.remove('visible');
+            toggleTreeViewBtn.classList.remove('active');
+        });
+
+        document.getElementById('toggleAllModels').addEventListener('click', () => {
+            const allVisible = Object.values(models)
+                .filter(m => m.model && !m.model.destroyed)
+                .every(({ model }) => model.visible);
+            Object.values(models)
+                .filter(m => m.model && !m.model.destroyed)
+                .forEach(({ model }) => {
+                    model.visible = !allVisible;
+                });
+            setStatus(`All models ${allVisible ? 'hidden' : 'shown'}`);
+        });
+
+        document.getElementById('removeAllModels').addEventListener('click', () => {
+            Object.keys(models).forEach(modelId => {
+                const { model } = models[modelId];
+                if (model && !model.destroyed) {
+                    model.destroy(); // Use destroy() instead of removeModel
+                }
+                delete models[modelId];
+            });
+            models = {};
+            updateModelName();
+            updateObjectCount();
+            setStatus('All models removed');
+            splashScreen.classList.remove('hidden');
+            treeView.clear();
+        });
+    }
+
+    updateTreeViewHeader();
 </script>
 </body>
 </html>

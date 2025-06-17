@@ -1,9 +1,9 @@
 # 🌐 Online XKT Viewer
 
-Online viewer for `.xkt` models built with [xeokit](https://xeokit.io/)!  
+Online viewer for `.xkt` models built with [xeokit](https://xeokit.io/)!
 Quickly view your BIM models directly in your browser.
 
-🔗 **[Live Demo Here](https://your-demo-link.com](https://xkt-viewer.vercel.app/))**
+🔗 **[Live Demo Here](https://xkt-viewer.vercel.app/)**
 
 ---
 

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Realtime Staff Movement with Path and Section Plane</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="pathstyle.css">
+    <style>
+        .staff-icon {
+            position: fixed;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSGHnCJ84T4cOcTDX1Hg-s9KL0vzWJZJvfjXQ&s');
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 10px #00ffcc;
+            z-index: 2000;
+            pointer-events: none;
+            display: none;
+        }
+
+        #staffViewButton, #savePathButton, #startPathButton, #undoPathButton {
+            position: fixed;
+            right: 20px;
+            background: #00ffcc;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 0 10px #00ffcc;
+            z-index: 1000;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+        }
+
+        #staffViewButton { top: 80px; display: none; }
+        #savePathButton { top: 130px; display: none; }
+        #startPathButton { top: 180px; }
+        #undoPathButton { top: 230px; display: none; }
+
+        #staffViewButton:hover, #savePathButton:hover, #startPathButton:hover, #undoPathButton:hover {
+            background: #ff00ff;
+            box-shadow: 0 0 15px #ff00ff;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" class="w-full h-full fixed top-0 left-0"></canvas>
+    <canvas id="myNavCubeCanvas"></canvas>
+    <button id="toggleTreeView" class="hover:text-black">
+        <i class="fas fa-sitemap"></i>
+    </button>
+    <div id="treeViewContainer" class="hidden"></div>
+    <div id="progressContainer">
+        <div>Loading Models: <span id="loadedCount">0</span>/<span id="totalCount">0</span></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="text-[#00ffcc] text-lg mb-2">Initializing Viewer</div>
+        <div class="text-[#00ffcc] text-sm" id="initStatus">Please wait...</div>
+    </div>
+    <div id="staffIcon" class="staff-icon"></div>
+    <button id="staffViewButton">Enable Staff View</button>
+    <button id="savePathButton">Save Path</button>
+    <button id="startPathButton">Start Path Drawing</button>
+    <button id="undoPathButton">Undo Last Point</button>
+
+    <script type="module">
+        import { 
+            Viewer, 
+            XKTLoaderPlugin, 
+            NavCubePlugin, 
+            TreeViewPlugin, 
+            SectionPlanesPlugin, 
+            math, 
+            Mesh, 
+            ReadableGeometry, 
+            PhongMaterial, 
+            buildSphereGeometry 
+        } from "./dist/xeokit-sdk.min.es.js";
+
+        const viewer = new Viewer({
+            canvasId: "myCanvas",
+            transparent: true
+        });
+
+        viewer.camera.eye = [-3.933, 2.855, 27.018];
+        viewer.camera.look = [4.400, 3.724, 8.899];
+        viewer.camera.up = [-0.018, 0.999, 0.039];
+
+        new NavCubePlugin(viewer, {
+            canvasId: "myNavCubeCanvas",
+            visible: true,
+            size: 200,
+            alignment: "bottomRight",
+            bottomMargin: 30,
+            rightMargin: 30
+        });
+
+        const treeView = new TreeViewPlugin(viewer, {
+            containerElement: document.getElementById("treeViewContainer"),
+            autoExpandDepth: 3
+        });
+
+        const toggleButton = document.getElementById("toggleTreeView");
+        const treeViewContainer = document.getElementById("treeViewContainer");
+
+        toggleButton.addEventListener("click", () => {
+            treeViewContainer.classList.toggle("hidden");
+            toggleButton.classList.toggle("shifted");
+        });
+
+        const loadingOverlay = document.getElementById("loadingOverlay");
+        const initStatus = document.getElementById("initStatus");
+        const loadedCountElement = document.getElementById("loadedCount");
+        const totalCountElement = document.getElementById("totalCount");
+        const progressFill = document.getElementById("progressFill");
+
+        initStatus.innerHTML = "Initializing Viewer...";
+        const t0 = performance.now();
+
+        const xktLoader = new XKTLoaderPlugin(viewer);
+
+        const t1 = performance.now();
+        initStatus.innerHTML = `Viewer initialized in ${((t1 - t0) / 1000).toFixed(2)} seconds`;
+
+        setTimeout(() => {
+            loadingOverlay.style.opacity = "0";
+            loadingOverlay.style.transition = "opacity 0.5s ease";
+            setTimeout(() => {
+                loadingOverlay.style.display = "none";
+            }, 500);
+        }, 1000);
+
+        const canvas = document.getElementById("myCanvas");
+        const staffIcon = document.getElementById("staffIcon");
+        const staffViewButton = document.getElementById("staffViewButton");
+        const savePathButton = document.getElementById("savePathButton");
+        const startPathButton = document.getElementById("startPathButton");
+        const undoPathButton = document.getElementById("undoPathButton");
+
+        // Door center (from previous AABB)
+        const doorCenter = [299778.44837620834, 1.194917607246989, -2821843.6468226825];
+
+        // Section Planes Plugin
+        const sectionPlanes = new SectionPlanesPlugin(viewer);
+        let sectionPlane = sectionPlanes.createSectionPlane({
+            id: "cutaway",
+            pos: [doorCenter[0], 2.0, doorCenter[2]],
+            dir: [0, -1, 0],
+            active: true
+        });
+
+        // Draggable line for section plane
+        const lineEndpoints = [
+            [doorCenter[0] - 5, 2.0, doorCenter[2]], // Left
+            [doorCenter[0] + 5, 2.0, doorCenter[2]]  // Right
+        ];
+
+        const lineMesh = new Mesh(viewer.scene, {
+            geometry: new ReadableGeometry(viewer.scene, {
+                primitive: "lines",
+                positions: [
+                    lineEndpoints[0][0], lineEndpoints[0][1], lineEndpoints[0][2],
+                    lineEndpoints[1][0], lineEndpoints[1][1], lineEndpoints[1][2]
+                ],
+                indices: [0, 1]
+            }),
+            material: new PhongMaterial(viewer.scene, {
+                emissive: [1, 0, 0],
+                diffuse: [0, 0, 0],
+                ambient: [0, 0, 0],
+                lineWidth: 3,
+                alpha: 1,
+                alphaMode: "opaque"
+            }),
+            pickable: true
+        });
+
+        // Endpoint markers (using buildSphereGeometry)
+        const sphereGeom = buildSphereGeometry({ radius: 0.2 });
+        const endpointMeshes = lineEndpoints.map((pos, i) => new Mesh(viewer.scene, {
+            geometry: new ReadableGeometry(viewer.scene, {
+                primitive: "triangles",
+                positions: sphereGeom.positions,
+                indices: sphereGeom.indices,
+                normals: sphereGeom.normals
+            }),
+            material: new PhongMaterial(viewer.scene, { diffuse: [1, 0, 0], alpha: 1 }),
+            position: pos,
+            pickable: true,
+            id: `endpoint-${i}`
+        }));
+
+        // Test line to confirm rendering
+        new Mesh(viewer.scene, {
+            geometry: new ReadableGeometry(viewer.scene, {
+                primitive: "lines",
+                positions: [
+                    doorCenter[0], 1, doorCenter[2],
+                    doorCenter[0] + 10, 1, doorCenter[2]
+                ],
+                indices: [0, 1]
+            }),
+            material: new PhongMaterial(viewer.scene, {
+                emissive: [1, 1, 1], // White for visibility
+                diffuse: [0, 0, 0],
+                ambient: [0, 0, 0],
+                lineWidth: 5,
+                alpha: 1,
+                alphaMode: "opaque"
+            })
+        });
+
+        // Dragging logic
+        let draggingEndpoint = null;
+        let lastCanvasPos = null;
+
+        canvas.addEventListener("mousedown", (event) => {
+            const hit = viewer.scene.pick({
+                canvasPos: [event.offsetX, event.offsetY],
+                pickSurface: true
+            });
+            if (hit && hit.entity && hit.entity.id.startsWith("endpoint-")) {
+                draggingEndpoint = parseInt(hit.entity.id.split("-")[1]);
+                lastCanvasPos = [event.offsetX, event.offsetY];
+            }
+        });
+
+        canvas.addEventListener("mousemove", (event) => {
+            if (draggingEndpoint === null) return;
+            const newCanvasPos = [event.offsetX, event.offsetY];
+            const delta = [
+                newCanvasPos[0] - lastCanvasPos[0],
+                newCanvasPos[1] - lastCanvasPos[1]
+            ];
+
+            const worldPos = viewer.scene.camera.projectWorldPos(lineEndpoints[draggingEndpoint]);
+            if (worldPos) {
+                const newY = lineEndpoints[draggingEndpoint][1] - delta[1] * 0.01;
+                lineEndpoints[draggingEndpoint][1] = Math.max(0, Math.min(10, newY));
+                endpointMeshes[draggingEndpoint].position = lineEndpoints[draggingEndpoint];
+
+                lineMesh.geometry.positions = [
+                    lineEndpoints[0][0], lineEndpoints[0][1], lineEndpoints[0][2],
+                    lineEndpoints[1][0], lineEndpoints[1][1], lineEndpoints[1][2]
+                ];
+
+                const planeY = (lineEndpoints[0][1] + lineEndpoints[1][1]) / 2;
+                sectionPlane.pos = [doorCenter[0], planeY, doorCenter[2]];
+            }
+            lastCanvasPos = newCanvasPos;
+        });
+
+        canvas.addEventListener("mouseup", () => {
+            draggingEndpoint = null;
+            lastCanvasPos = null;
+        });
+
+        // Path drawing
+        let pathPoints = [];
+        let pathLines = [];
+        let isDrawingPath = false;
+
+        startPathButton.addEventListener("click", () => {
+            isDrawingPath = !isDrawingPath;
+            startPathButton.textContent = isDrawingPath ? "Stop Path Drawing" : "Start Path Drawing";
+            console.log("Path drawing mode:", isDrawingPath ? "enabled" : "disabled");
+        });
+
+        canvas.addEventListener("click", (event) => {
+            if (draggingEndpoint !== null) return;
+            if (!isDrawingPath) return;
+
+            const hit = viewer.scene.pick({
+                canvasPos: [event.offsetX, event.offsetY],
+                pickSurface: true
+            });
+
+            if (hit && hit.worldPos) {
+                const point = [...hit.worldPos]; // Convert Float64Array to array
+                console.log("Picked point:", point);
+
+                // Avoid duplicate points
+                if (pathPoints.length > 0) {
+                    const lastPoint = pathPoints[pathPoints.length - 1];
+                    if (point[0] === lastPoint[0] && point[1] === lastPoint[1] && point[2] === lastPoint[2]) {
+                        console.log("Skipped duplicate point:", point);
+                        return;
+                    }
+                }
+
+                pathPoints.push(point);
+
+                if (pathPoints.length > 1) {
+                    const prevPoint = pathPoints[pathPoints.length - 2];
+                    const line = new Mesh(viewer.scene, {
+                        geometry: new ReadableGeometry(viewer.scene, {
+                            primitive: "lines",
+                            positions: [
+                                prevPoint[0], prevPoint[1], prevPoint[2],
+                                point[0], point[1], point[2]
+                            ],
+                            indices: [0, 1]
+                        }),
+                        material: new PhongMaterial(viewer.scene, {
+                            emissive: [1, 0, 0],
+                            diffuse: [0, 0, 0],
+                            ambient: [0, 0, 0],
+                            lineWidth: 5,
+                            alpha: 1,
+                            alphaMode: "opaque"
+                        })
+                    });
+                    pathLines.push(line);
+                    console.log("Added line from", prevPoint, "to", point);
+                }
+
+                savePathButton.style.display = pathPoints.length > 0 ? "block" : "none";
+                undoPathButton.style.display = pathPoints.length > 0 ? "block" : "none";
+            } else {
+                console.log("No surface picked at", [event.offsetX, event.offsetY]);
+            }
+        });
+
+        undoPathButton.addEventListener("click", () => {
+            if (pathPoints.length > 0) {
+                pathPoints.pop();
+                if (pathLines.length > 0) {
+                    const lastLine = pathLines.pop();
+                    lastLine.destroy();
+                }
+                console.log("Undo: Removed last point. Points left:", pathPoints.length);
+                savePathButton.style.display = pathPoints.length > 0 ? "block" : "none";
+                undoPathButton.style.display = pathPoints.length > 0 ? "block" : "none";
+            }
+        });
+
+        savePathButton.addEventListener("click", () => {
+            console.log("Saved Path:", JSON.stringify(pathPoints));
+            isDrawingPath = false;
+            startPathButton.textContent = "Start Path Drawing";
+        });
+
+        // Staff movement (updated with provided points)
+        const staffPath = [
+        [299788.16251479695, -1.2046003688779763, -2821844.7159797577],
+            [299778.44319823646, 0.9757664462447062, -2821843.625485253],
+            [299779.0951081587, 0.13786595426167825, -2821846.0502679083],
+            [299777.8458299775, 0.2030872105714332, -2821847.568744245],
+            [299778.9425749174, 0.12411618787661727, -2821845.982806751],
+            [299778.5769387137, 0.11739755418130304, -2821849.770637856],
+            [299779.54496318405, 0.11319577113711521, -2821852.7838109336],
+            [299777.12359431403, 1.1701456621665125, -2821854.473426458],
+            [299774.5726180664, 0.10569651986433204, -2821856.8661010778],
+            [299775.45720286306, 0.09985042115834464, -2821861.105833679],
+            [299777.1229131114, 0.09498189300810456, -2821865.5684911436],
+            [299778.4850334301, 0.0002612195336775258, -2821868.735508017],
+            [299778.4038625273, -0.0001524411641815604, -2821874.2404730655],
+            [299782.3094665929, -0.0001656819198236903, -2821876.221871699],
+            [299784.4315364315, 0.6267944846273119, -2821876.473680199],
+            [299785.86686557886, 0.00009078066874312896, -2821882.9146071267],
+            [299786.49382109474, 1.7945354086501064, -2821887.090661459],
+            [299791.46904079703, 0.00006219732382906074, -2821872.1345046307],
+            [299790.8369923773, 0.00005801424595919258, -2821869.75380909],
+            [299787.89988077356, 0.1024164928705682, -2821858.413617301],
+            [299787.1095757785, 0.10947053825656017, -2821853.450464361],
+            [299789.20267361996, 0.5132716211720743, -2821851.882280206],
+            [299793.0669758586, 0.11222958862093524, -2821851.158968605],
+            [299791.7827941281, 1.987927240780075, -2821845.293859478],
+            [299786.1191815247, 0.1220395415170481, -2821845.48092771]
+        ];
+
+        let currentPathIndex = 0;
+        let staffPosition = [...staffPath[0]];
+        let staffViewEnabled = false;
+        let movementInterval = null;
+
+        function updateStaffIcon() {
+            const canvasPos = viewer.scene.camera.projectWorldPos(staffPosition);
+            if (canvasPos) {
+                const canvasRect = canvas.getBoundingClientRect();
+                const screenX = canvasRect.left + canvasPos[0];
+                const screenY = canvasRect.top + canvasPos[1];
+                staffIcon.style.left = `${screenX - 25}px`;
+                staffIcon.style.top = `${screenY - 25}px`;
+                staffIcon.style.display = "block";
+            } else {
+                staffIcon.style.display = "none";
+            }
+        }
+
+        function startStaffMovement() {
+            movementInterval = setInterval(() => {
+                if (currentPathIndex >= staffPath.length - 1) {
+                    clearInterval(movementInterval);
+                    movementInterval = null;
+                    return;
+                }
+
+                currentPathIndex++;
+                staffPosition = [...staffPath[currentPathIndex]];
+
+                if (currentPathIndex === 1) {
+                    staffViewButton.style.display = "block";
+                }
+
+                updateStaffIcon();
+                if (staffViewEnabled) {
+                    updateStaffViewCamera();
+                }
+            }, 2000);
+        }
+
+        function updateStaffViewCamera() {
+            viewer.cameraFlight.flyTo({
+                eye: [
+                    staffPosition[0],
+                    staffPosition[1] + 2.0,
+                    staffPosition[2] + 5.0
+                ],
+                look: staffPosition,
+                up: [0, 1, 0],
+                duration: 0.5
+            });
+        }
+
+        staffViewButton.addEventListener("click", () => {
+            staffViewEnabled = true;
+            updateStaffViewCamera();
+            staffViewButton.textContent = "Disable Staff View";
+            staffViewButton.onclick = () => {
+                staffViewEnabled = false;
+                viewer.cameraControl.enabled = true;
+                staffViewButton.style.display = "none";
+                staffViewButton.textContent = "Enable Staff View";
+                staffViewButton.onclick = arguments.callee;
+            };
+        });
+
+        viewer.scene.camera.on("matrix", () => {
+            updateStaffIcon();
+        });
+
+        const models = [
+            { id: "AR-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-AR-00001.xkt" },
+            { id: "AR-02", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-AR-00002.xkt" },
+            { id: "AR-03", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-AR-00003.xkt" },
+            { id: "DR-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-DR-00001.xkt" },
+            { id: "EL-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-EL-00001.xkt" },
+            { id: "EL-02", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-EL-00002.xkt" },
+            { id: "EL-03", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-EL-00003.xkt" },
+            { id: "FF-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-FF-00001.xkt" },
+            { id: "FR-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-FR-00001.xkt" },
+            { id: "HV-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-HV-00001.xkt" },
+            { id: "LC-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-LC-00001.xkt" },
+            { id: "ME-02", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-ME-00002.xkt" },
+            { id: "ME-03", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-ME-00003.xkt" },
+            { id: "ST-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-ST-00001.xkt" },
+            { id: "ST-02", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-ST-00002.xkt" },
+            { id: "ST-03", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-ST-00003.xkt" },
+            { id: "WS-01", src: "./src/models/R03-C03B01-MAG-00-ZZ-MOD-WS-00001.xkt" },
+        ];
+
+        totalCountElement.textContent = models.length;
+
+        let loadedModels = 0;
+        const loadReports = [];
+        let firstModelLoaded = false;
+
+        const updateProgress = () => {
+            loadedCountElement.textContent = loadedModels;
+            const percentage = (loadedModels / models.length) * 100;
+            progressFill.style.width = `${percentage}%`;
+        };
+
+        const loadModelSequentially = (index) => {
+            if (index >= models.length) {
+                startStaffMovement();
+                updateStaffIcon();
+                return;
+            }
+
+            const model = models[index];
+            const startTime = performance.now();
+
+            const sceneModel = xktLoader.load({
+                id: model.id,
+                src: model.src,
+                edges: false
+            });
+
+            sceneModel.on("loaded", () => {
+                const endTime = performance.now();
+                const loadTime = (endTime - startTime) / 1000;
+                loadReports.push(`${model.id}: ${loadTime.toFixed(3)} seconds`);
+                loadedModels++;
+
+                updateProgress();
+
+                if (!firstModelLoaded) {
+                    viewer.cameraFlight.flyTo(sceneModel);
+                    firstModelLoaded = true;
+                }
+
+                setTimeout(() => {
+                    loadModelSequentially(index + 1);
+                }, 100);
+            });
+
+            sceneModel.on("error", (err) => {
+                console.error(`Failed to load ${model.id}:`, err);
+                loadReports.push(`${model.id}: Failed to load`);
+                loadedModels++;
+                updateProgress();
+                setTimeout(() => {
+                    loadModelSequentially(index + 1);
+                }, 100);
+            });
+        };
+
+        loadModelSequentially(0);
+    </script>
+</body>
+</html>

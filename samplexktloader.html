@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>xeokit XKT Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #myCanvas {
+           background-color: black;
+        }
+        #myNavCubeCanvas {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            filter: drop-shadow(0 0 8px #00ffcc);
+        }
+
+        #treeViewContainer {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            height: calc(100vh - 40px);
+            width: 320px;
+            background: rgba(10, 10, 10, 0.9);
+            border-right: 2px solid #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+            overflow-y: auto;
+            padding: 20px;
+            color: #00ffcc;
+            font-size: 14px;
+            user-select: none;
+            transition: transform 0.3s ease-in-out;
+            z-index: 1000;
+        }
+
+        #treeViewContainer.hidden {
+            transform: translateX(-100%);
+        }
+
+        #treeViewContainer ul {
+            list-style: none;
+            padding-left: 1.5rem;
+        }
+
+        #treeViewContainer ul li {
+            position: relative;
+            padding: 6px 0;
+        }
+
+        #treeViewContainer ul li a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            background: #ff00ff;
+            color: #000;
+            text-decoration: none;
+            position: absolute;
+            left: -1.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li a.plus {
+            background: #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        #treeViewContainer ul li a.minus {
+            background: #ff00ff;
+            box-shadow: 0 0 5px #ff00ff;
+        }
+
+        #treeViewContainer ul li span {
+            display: inline-block;
+            width: 100%;
+            padding: 4px 10px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            text-shadow: 0 0 5px #00ffcc;
+        }
+
+        #treeViewContainer ul li span:hover {
+            background: rgba(0, 255, 204, 0.2);
+            cursor: pointer;
+            transform: translateX(5px);
+        }
+
+        #treeViewContainer .highlighted-node {
+            background: rgba(255, 0, 255, 0.3);
+            color: #00ffcc;
+            border: 1px solid #ff00ff;
+            border-radius: 4px;
+            padding: 4px 10px;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1100;
+            background: #ff00ff;
+            color: #000;
+            padding: 10px;
+            border-radius: 8px;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 10px #ff00ff;
+        }
+
+        #toggleTreeView:hover {
+            background: #00ffcc;
+            box-shadow: 0 0 15px #00ffcc;
+            transform: scale(1.1);
+        }
+
+        #toggleTreeView.shifted {
+            left: 340px;
+        }
+
+        #time {
+            background: rgba(10, 10, 10, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            left: 50%;
+            border: 1px solid #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        #progressContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 10, 10, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            color: #00ffcc;
+            z-index: 1000;
+        }
+        
+        .progress-bar {
+            width: 200px;
+            height: 10px;
+            background: rgba(0, 255, 204, 0.2);
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            transition: width 0.3s ease;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 255, 204, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #00ffcc;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" class="w-full h-full fixed top-0 left-0"></canvas>
+    <canvas id="myNavCubeCanvas"></canvas>
+    <button id="toggleTreeView" class="hover:text-black">
+        <i class="fas fa-sitemap"></i>
+    </button>
+    <div id="treeViewContainer" class="hidden"></div>
+    <div id="time" class="fixed bottom-6 left-6 text-sm text-[#00ffcc]"></div>
+    
+    <div id="progressContainer">
+        <div>Loading Models: <span id="loadedCount">0</span>/<span id="totalCount">0</span></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="text-[#00ffcc] text-lg mb-2">Initializing Viewer</div>
+        <div class="text-[#00ffcc] text-sm" id="initStatus">Please wait...</div>
+    </div>
+
+    <script type="module">
+      import { Viewer, XKTLoaderPlugin, NavCubePlugin, TreeViewPlugin } from "./dist/xeokit-sdk.min.es.js";
+  
+      const viewer = new Viewer({
+          canvasId: "myCanvas",
+          transparent: true
+      });
+  
+      viewer.camera.eye = [-3.933, 2.855, 27.018];
+      viewer.camera.look = [4.400, 3.724, 8.899];
+      viewer.camera.up = [-0.018, 0.999, 0.039];
+  
+      new NavCubePlugin(viewer, {
+          canvasId: "myNavCubeCanvas",
+          visible: true,
+          size: 200,
+          alignment: "bottomRight",
+          bottomMargin: 30,
+          rightMargin: 30
+      });
+  
+      const treeView = new TreeViewPlugin(viewer, {
+          containerElement: document.getElementById("treeViewContainer"),
+          autoExpandDepth: 3
+      });
+  
+      const toggleButton = document.getElementById("toggleTreeView");
+      const treeViewContainer = document.getElementById("treeViewContainer");
+  
+      toggleButton.addEventListener("click", () => {
+          treeViewContainer.classList.toggle("hidden");
+          toggleButton.classList.toggle("shifted");
+      });
+  
+      const timeElement = document.getElementById("time");
+      const loadingOverlay = document.getElementById("loadingOverlay");
+      const initStatus = document.getElementById("initStatus");
+      const loadedCountElement = document.getElementById("loadedCount");
+      const totalCountElement = document.getElementById("totalCount");
+      const progressFill = document.getElementById("progressFill");
+      
+      initStatus.innerHTML = "Initializing Viewer...";
+      const t0 = performance.now();
+  
+      const xktLoader = new XKTLoaderPlugin(viewer);
+  
+      const t1 = performance.now();
+      initStatus.innerHTML = `Viewer initialized in ${((t1 - t0) / 1000).toFixed(2)} seconds`;
+      
+      // Remove loading overlay once initialization is complete
+      setTimeout(() => {
+          loadingOverlay.style.opacity = "0";
+          loadingOverlay.style.transition = "opacity 0.5s ease";
+          setTimeout(() => {
+              loadingOverlay.style.display = "none";
+          }, 500);
+      }, 1000);
+      
+      timeElement.innerHTML = `Viewer initialized in ${((t1 - t0) / 1000).toFixed(2)} seconds<br>Loading models...`;
+
+      const models = [
+          // { id: "xktmodel1", src: "./src/IFC Models/ifcmodel1.xkt" },
+          // { id: "xktmodel2", src: "./src/IFC Models/ifcmodel2.xkt" },
+          // { id: "xktmodel3", src: "./src/IFC Models/ifcmodel3.xkt" },
+          { id: "xktmodel4", src: "./src/IFC Models/ifcmodel4.xkt" },
+          { id: "xktmodel5", src: "./src/IFC Models/ifcmodel5.xkt" },
+          { id: "xktmodel6", src: "./src/IFC Models/ifcmodel6.xkt" },
+          { id: "xktmodel7", src: "./src/IFC Models/ifcmodel7.xkt" },
+          { id: "xktmodel8", src: "./src/IFC Models/ifcmodel8.xkt" },
+          { id: "xktmodel9", src: "./src/IFC Models/ifcmodel9.xkt" },
+          { id: "xktmodel10", src: "./src/IFC Models/ifcmodel10.xkt" },
+          { id: "xktmodel11", src: "./src/IFC Models/ifcmodel11.xkt" },
+          { id: "xktmodel12", src: "./src/IFC Models/ifcmodel12.xkt" },
+          { id: "xktmodel13", src: "./src/IFC Models/ifcmodel13.xkt" },
+          { id: "xktmodel14", src: "./src/IFC Models/ifcmodel14.xkt" },
+          { id: "xktmodel15", src: "./src/IFC Models/ifcmodel15.xkt" },
+          { id: "xktmodel16", src: "./src/IFC Models/ifcmodel16.xkt" },
+          { id: "xktmodel17", src: "./src/IFC Models/ifcmodel17.xkt" },
+          { id: "xktmodel18", src: "./src/IFC Models/ifcmodel18.xkt" },
+          { id: "xktmodel19", src: "./src/IFC Models/ifcmodel19.xkt" },
+          { id: "xktmodel20", src: "./src/IFC Models/ifcmodel20.xkt" },
+          { id: "xktmodel21", src: "./src/IFC Models/ifcmodel21.xkt" },
+          { id: "xktmodel22", src: "./src/IFC Models/ifcmodel22.xkt" },
+          { id: "xktmodel23", src: "./src/IFC Models/ifcmodel23.xkt" },
+          { id: "xktmodel24", src: "./src/IFC Models/ifcmodel24.xkt" },
+          { id: "xktmodel25", src: "./src/IFC Models/ifcmodel25.xkt" },
+          { id: "xktmodel26", src: "./src/IFC Models/ifcmodel26.xkt" },
+          { id: "xktmodel27", src: "./src/IFC Models/ifcmodel27.xkt" },
+          { id: "xktmodel28", src: "./src/IFC Models/ifcmodel28.xkt" },
+          { id: "xktmodel29", src: "./src/IFC Models/ifcmodel29.xkt" },
+          { id: "xktmodel30", src: "./src/IFC Models/ifcmodel30.xkt" },
+          { id: "xktmodel31", src: "./src/IFC Models/ifcmodel31.xkt" },
+          { id: "xktmodel32", src: "./src/IFC Models/ifcmodel32.xkt" },
+          { id: "xktmodel33", src: "./src/IFC Models/ifcmodel33.xkt" },
+          { id: "xktmodel34", src: "./src/IFC Models/ifcmodel34.xkt" },
+          { id: "xktmodel35", src: "./src/IFC Models/ifcmodel35.xkt" },
+          { id: "xktmodel36", src: "./src/IFC Models/ifcmodel36.xkt" },
+          { id: "xktmodel37", src: "./src/IFC Models/ifcmodel37.xkt" },
+          { id: "xktmodel38", src: "./src/IFC Models/ifcmodel38.xkt" },
+          { id: "xktmodel39", src: "./src/IFC Models/ifcmodel39.xkt" },
+          { id: "xktmodel40", src: "./src/IFC Models/ifcmodel40.xkt" },
+          { id: "xktmodel41", src: "./src/IFC Models/ifcmodel41.xkt" },
+          { id: "xktmodel42", src: "./src/IFC Models/ifcmodel42.xkt" },
+          { id: "xktmodel43", src: "./src/IFC Models/ifcmodel43.xkt" },
+          { id: "xktmodel44", src: "./src/IFC Models/ifcmodel44.xkt" },
+          { id: "xktmodel45", src: "./src/IFC Models/ifcmodel45.xkt" },
+          { id: "xktmodel46", src: "./src/IFC Models/ifcmodel46.xkt" },
+          { id: "xktmodel47", src: "./src/IFC Models/ifcmodel47.xkt" },
+          { id: "xktmodel48", src: "./src/IFC Models/ifcmodel48.xkt" },
+          { id: "xktmodel49", src: "./src/IFC Models/ifcmodel49.xkt" },
+          { id: "xktmodel50", src: "./src/IFC Models/ifcmodel50.xkt" },
+          { id: "xktmodel51", src: "./src/IFC Models/ifcmodel51.xkt" },
+          { id: "xktmodel52", src: "./src/IFC Models/ifcmodel52.xkt" },
+          { id: "xktmodel53", src: "./src/IFC Models/ifcmodel53.xkt" },
+          { id: "xktmodel54", src: "./src/IFC Models/ifcmodel54.xkt" },
+          { id: "xktmodel55", src: "./src/IFC Models/ifcmodel55.xkt" },
+          { id: "xktmodel56", src: "./src/IFC Models/ifcmodel56.xkt" },
+          { id: "xktmodel57", src: "./src/IFC Models/ifcmodel57.xkt" },
+          { id: "xktmodel58", src: "./src/IFC Models/ifcmodel58.xkt" },
+          { id: "xktmodel59", src: "./src/IFC Models/ifcmodel59.xkt" },
+          { id: "xktmodel60", src: "./src/IFC Models/ifcmodel60.xkt" },
+          { id: "xktmodel61", src: "./src/IFC Models/ifcmodel61.xkt" },
+          { id: "xktmodel62", src: "./src/IFC Models/ifcmodel62.xkt" },
+          { id: "xktmodel63", src: "./src/IFC Models/ifcmodel63.xkt" },
+          { id: "xktmodel64", src: "./src/IFC Models/ifcmodel64.xkt" },
+          { id: "xktmodel65", src: "./src/IFC Models/ifcmodel65.xkt" },
+          { id: "xktmodel66", src: "./src/IFC Models/ifcmodel66.xkt" },
+          { id: "xktmodel67", src: "./src/IFC Models/ifcmodel67.xkt" },
+          { id: "xktmodel68", src: "./src/IFC Models/ifcmodel68.xkt" },
+          { id: "xktmodel69", src: "./src/IFC Models/ifcmodel69.xkt" },
+          { id: "xktmodel70", src: "./src/IFC Models/ifcmodel70.xkt" },
+          { id: "xktmodel71", src: "./src/IFC Models/ifcmodel71.xkt" },
+          { id: "xktmodel72", src: "./src/IFC Models/ifcmodel72.xkt" },
+          { id: "xktmodel73", src: "./src/IFC Models/ifcmodel73.xkt" },
+          { id: "xktmodel74", src: "./src/IFC Models/ifcmodel74.xkt" },
+          { id: "xktmodel75", src: "./src/IFC Models/ifcmodel75.xkt" },
+          { id: "xktmodel76", src: "./src/IFC Models/ifcmodel76.xkt" },
+          { id: "xktmodel77", src: "./src/IFC Models/ifcmodel77.xkt" },
+          { id: "xktmodel78", src: "./src/IFC Models/ifcmodel78.xkt" },
+          { id: "xktmodel79", src: "./src/IFC Models/ifcmodel79.xkt" },
+          { id: "xktmodel80", src: "./src/IFC Models/ifcmodel80.xkt" },
+          { id: "xktmodel81", src: "./src/IFC Models/ifcmodel81.xkt" },
+          { id: "xktmodel82", src: "./src/IFC Models/ifcmodel82.xkt" },
+          { id: "xktmodel83", src: "./src/IFC Models/ifcmodel83.xkt" },
+          { id: "xktmodel84", src: "./src/IFC Models/ifcmodel84.xkt" },
+          { id: "xktmodel85", src: "./src/IFC Models/ifcmodel85.xkt" },
+          { id: "xktmodel86", src: "./src/IFC Models/ifcmodel86.xkt" },
+          { id: "xktmodel87", src: "./src/IFC Models/ifcmodel87.xkt" },
+          { id: "xktmodel88", src: "./src/IFC Models/ifcmodel88.xkt" },
+          { id: "xktmodel89", src: "./src/IFC Models/ifcmodel89.xkt" },
+          { id: "xktmodel90", src: "./src/IFC Models/ifcmodel90.xkt" },
+          { id: "xktmodel91", src: "./src/IFC Models/ifcmodel91.xkt" },
+          { id: "xktmodel92", src: "./src/IFC Models/ifcmodel92.xkt" },
+          { id: "xktmodel93", src: "./src/IFC Models/ifcmodel93.xkt" },
+          { id: "xktmodel94", src: "./src/IFC Models/ifcmodel94.xkt" },
+          { id: "xktmodel95", src: "./src/IFC Models/ifcmodel95.xkt" },
+          { id: "xktmodel96", src: "./src/IFC Models/ifcmodel96.xkt" },
+          { id: "xktmodel97", src: "./src/IFC Models/ifcmodel97.xkt" },
+          { id: "xktmodel98", src: "./src/IFC Models/ifcmodel98.xkt" },
+         { id: "xktmodel99", src: "./src/IFC Models/ifcmodel99.xkt" },
+          { id: "xktmodel100", src: "./src/IFC Models/ifcmodel100.xkt" }
+      ];
+  
+      // Update total count in the UI
+      totalCountElement.textContent = models.length;
+      
+      let loadedModels = 0;
+      const loadReports = [];
+      let firstModelLoaded = false;
+      
+      // Function to update progress
+      const updateProgress = () => {
+          loadedCountElement.textContent = loadedModels;
+          const percentage = (loadedModels / models.length) * 100;
+          progressFill.style.width = `${percentage}%`;
+      };
+  
+      // Load each model with a small delay between them to prevent browser freezing
+      const loadModelSequentially = (index) => {
+          if (index >= models.length) return;
+          
+          const model = models[index];
+          const startTime = performance.now();
+          
+          const sceneModel = xktLoader.load({
+              id: model.id,
+              src: model.src,
+              edges: false
+          });
+  
+          sceneModel.on("loaded", () => {
+              const endTime = performance.now();
+              const loadTime = (endTime - startTime) / 1000;
+              loadReports.push(`${model.id}: ${loadTime.toFixed(3)} seconds`);
+              loadedModels++;
+              
+              // Update the loading status display
+              timeElement.innerHTML = `
+                  <strong>Loading Report:</strong><br>
+                  ${loadReports.map(report => `• ${report}`).join("<br>")}<br>
+                  <strong>Summary:</strong><br>
+                  Loaded ${loadedModels}/${models.length} models<br>
+                  Total Objects: ${viewer.scene.numEntities}
+              `;
+              
+              updateProgress();
+              
+              // For the first loaded model, focus the camera on it
+              if (!firstModelLoaded) {
+                  viewer.cameraFlight.flyTo(sceneModel);
+                  firstModelLoaded = true;
+              }
+              
+              // Load the next model
+              setTimeout(() => {
+                  loadModelSequentially(index + 1);
+              }, 100); // Small delay between model loads
+          });
+          
+          // Handle error if the model fails to load
+          sceneModel.on("error", (err) => {
+              console.error(`Failed to load ${model.id}:`, err);
+              loadReports.push(`${model.id}: Failed to load`);
+              
+              // Still increment counter and move to next model
+              loadedModels++;
+              updateProgress();
+              
+              setTimeout(() => {
+                  loadModelSequentially(index + 1);
+              }, 100);
+          });
+      };
+      
+      // Start loading models in sequence
+      loadModelSequentially(0);
+    </script>
+</body>
+</html>
