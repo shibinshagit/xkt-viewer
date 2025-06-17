@@ -896,6 +896,10 @@
             <i class="fas fa-border-style"></i>
             <span class="tooltip">Toggle Edges</span>
         </button>
+<!-- <button id="toggleDistanceMeasurements" class="toolbar-button">
+    <i class="fas fa-ruler"></i>
+    <span class="tooltip">Distance Measurements</span>
+</button> -->
         <button id="toggleXray" class="toolbar-button">
             <i class="fas fa-x-ray"></i>
             <span class="tooltip">X-Ray Mode</span>
@@ -980,7 +984,14 @@
     </div>
     <input type="file" id="fileInput" accept=".xkt" multiple />
 <script type="module">
-    import {Viewer, XKTLoaderPlugin, NavCubePlugin, TreeViewPlugin} from "./xeokit-sdk.min.es.js";
+    import {
+        Viewer,
+        XKTLoaderPlugin,
+        NavCubePlugin,
+        TreeViewPlugin,
+        FastNavPlugin,
+        DistanceMeasurementsPlugin
+    } from "./xeokit-sdk.min.es.js";
 
     const viewer = new Viewer({
         canvasId: "myCanvas",
@@ -1030,6 +1041,19 @@
         hierarchy: "containment"
     });
 
+    const fastNav = new FastNavPlugin(viewer, {
+        hideEdges: false, // Keep edges for clarity
+        scaleCanvasResolution: true, // Optimize rendering
+        scaleCanvasResolutionFactor: 0.5 // Balance quality and performance
+    });
+
+    const distanceMeasurements = new DistanceMeasurementsPlugin(viewer, {
+        defaultAxis: "xy", // Default to XY plane for measurements
+        labelVisible: true, // Show distance labels
+        snapToEdge: true, // Snap to edges for precision
+        snapToVertex: true // Snap to vertices
+    });
+
     const dropZone = document.getElementById('dropZone');
     const splashScreen = document.getElementById('splashScreen');
     const fileInput = document.getElementById('fileInput');
@@ -1041,6 +1065,7 @@
     const toggleXrayBtn = document.getElementById('toggleXray');
     const toggleInfoBtn = document.getElementById('toggleInfo');
     const openFileBtn = document.getElementById('openFile');
+    const toggleDistanceMeasurementsBtn = document.getElementById('toggleDistanceMeasurements');
     const statusElement = document.getElementById('status');
     const objectCountElement = document.getElementById('objectCount');
     const fpsCounterElement = document.getElementById('fpsCounter');
@@ -1061,13 +1086,16 @@
     let edgesEnabled = true;
     let xrayEnabled = false;
     let showInfoEnabled = false;
+    let distanceMeasurementsEnabled = false;
     let lastTime = performance.now();
     let frameCount = 0;
     let loadQueue = [];
     let isLoading = false;
     let loadedModels = 0;
     let totalModelsToLoad = 0;
-    const BATCH_SIZE = 5; // Load 5 models at a time
+    const BATCH_SIZE = 3; // Reduced for stability
+    const MAX_MODELS = 100; // Limit total models
+    const LOAD_TIMEOUT = 30000; // 30 seconds per model
 
     // Toggle tree view
     toggleTreeViewBtn.addEventListener('click', () => {
@@ -1139,6 +1167,18 @@
         }
     });
 
+    // Toggle distance measurements
+    toggleDistanceMeasurementsBtn.addEventListener('click', () => {
+        if (Object.keys(models).length === 0) {
+            setStatus('No models loaded', true);
+            return;
+        }
+        distanceMeasurementsEnabled = !distanceMeasurementsEnabled;
+        distanceMeasurements.active = distanceMeasurementsEnabled;
+        toggleDistanceMeasurementsBtn.classList.toggle('active', distanceMeasurementsEnabled);
+        setStatus(`Distance measurements ${distanceMeasurementsEnabled ? 'enabled' : 'disabled'}`);
+    });
+
     // Close info panel
     closeInfoPanelBtn.addEventListener('click', () => {
         infoPanel.classList.remove('visible');
@@ -1189,6 +1229,11 @@
                 setStatus('No valid XKT files selected', true);
                 return;
             }
+            if (files.length + Object.keys(models).length > MAX_MODELS) {
+                if (!confirm(`Loading ${files.length} models will exceed the ${MAX_MODELS} model limit. Continue?`)) {
+                    return;
+                }
+            }
             loadQueue.push(...files);
             totalModelsToLoad += files.length;
             updateModelName();
@@ -1223,6 +1268,11 @@
                 setStatus('No valid XKT files dropped', true);
                 return;
             }
+            if (files.length + Object.keys(models).length > MAX_MODELS) {
+                if (!confirm(`Loading ${files.length} models will exceed the ${MAX_MODELS} model limit. Continue?`)) {
+                    return;
+                }
+            }
             loadQueue.push(...files);
             totalModelsToLoad += files.length;
             updateModelName();
@@ -1239,16 +1289,33 @@
         splashScreen.classList.add('hidden');
 
         const batch = loadQueue.splice(0, BATCH_SIZE);
-        const batchPromises = batch.map(file => loadModelFromFile(file));
+        console.log(`Processing batch of ${batch.length} models`);
+
+        const batchPromises = batch.map(file => {
+            // Wrap loadModelFromFile with a timeout
+            return Promise.race([
+                loadModelFromFile(file),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error(`Timeout loading ${file.name}`)), LOAD_TIMEOUT)
+                )
+            ]);
+        });
 
         try {
-            await Promise.all(batchPromises);
-            loadedModels += batch.length;
+            const results = await Promise.allSettled(batchPromises);
+            results.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    console.error(`Failed to load ${batch[index].name}:`, result.reason);
+                    setStatus(`Error loading ${batch[index].name}: ${result.reason.message}`, true);
+                } else {
+                    loadedModels++;
+                }
+            });
             updateProgressBar();
 
             if (loadQueue.length > 0) {
-                // Use setTimeout to allow UI updates and prevent blocking
-                setTimeout(processLoadQueue, 100);
+                // Increased delay for UI responsiveness
+                setTimeout(processLoadQueue, 200);
             } else {
                 isLoading = false;
                 setTimeout(() => {
@@ -1272,8 +1339,17 @@
     // Load single model
     function loadModelFromFile(file) {
         return new Promise((resolve, reject) => {
+            console.log(`Loading model: ${file.name}`);
             loadingStatus.textContent = `Loading ${file.name}...`;
             setStatus(`Loading ${file.name}...`);
+
+            // Clean up oldest model if exceeding limit
+            if (Object.keys(models).length >= MAX_MODELS) {
+                const oldestId = Object.keys(models)[0];
+                models[oldestId].model.destroy();
+                delete models[oldestId];
+                updateTreeViewNodes();
+            }
 
             const modelId = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const reader = new FileReader();
@@ -1302,6 +1378,7 @@
                             aabb: getCombinedAABB(),
                             duration: 0.5
                         });
+                        console.log(`Loaded ${file.name} in ${(t1 - t0) / 1000}s`);
                         resolve();
                     });
 
@@ -1312,18 +1389,18 @@
                         updateModelName();
                         updateObjectCount();
                         updateTreeViewNodes();
-                        resolve(); // Continue with other models
+                        reject(err);
                     });
                 } catch (err) {
                     console.error(`Error processing XKT file ${file.name}:`, err);
                     setStatus(`Error processing ${file.name}`, true);
-                    resolve(); // Continue with other models
+                    reject(err);
                 }
             };
 
             reader.onerror = () => {
                 setStatus(`Error reading ${file.name}`, true);
-                resolve(); // Continue with other models
+                reject(new Error(`Error reading ${file.name}`));
             };
 
             reader.readAsArrayBuffer(file);
@@ -1341,6 +1418,7 @@
     let lastEntity = null;
 
     viewer.scene.input.on("mousemove", (coords) => {
+        if (distanceMeasurementsEnabled) return; // Disable highlighting during measurements
         const hit = viewer.scene.pick({
             canvasPos: coords
         });
@@ -1470,7 +1548,7 @@
             modelNameElement.innerHTML = `<span>BIM</span> Explorer Pro`;
         } else if (modelNames.length > 3) {
             modelNameElement.innerHTML = `<span>BIM</span> ${modelNames.length} models loaded`;
-            modelNameElement.title = modelNames.join(', '); // Show full list on hover
+            modelNameElement.title = modelNames.join(', ');
         } else {
             modelNameElement.innerHTML = `<span>BIM</span> ${modelNames.join(', ')}`;
         }
@@ -1488,14 +1566,21 @@
         const container = document.getElementById('treeViewContent');
         const modelList = Object.values(models).filter(m => m.model && !m.model.destroyed);
 
-        // Create custom model nodes
+        // Clear existing custom nodes
+        const existingUl = container.querySelector('ul.custom-model-list');
+        if (existingUl) {
+            existingUl.remove();
+        }
+
+        // Create new model nodes
         const ul = document.createElement('ul');
+        ul.className = 'custom-model-list';
         modelList.forEach(({ model, fileName }, index) => {
             const li = document.createElement('li');
             li.innerHTML = `
                 <span>${fileName}</span>
                 <span class="model-controls">
-                    <button class="toggle-model-visibility" data-model-id="${model.id}"><i class="fas fa-eye"></i></button>
+                    <button class="toggle-model-visibility" data-model-id="${model.id}"><i class="fas fa-eye${model.visible ? '' : '-slash'}"></i></button>
                     <button class="remove-model" data-model-id="${model.id}"><i class="fas fa-trash"></i></button>
                 </span>
             `;
@@ -1512,6 +1597,7 @@
                 const modelData = models[modelId];
                 if (modelData && modelData.model && !modelData.model.destroyed) {
                     modelData.model.visible = !modelData.model.visible;
+                    e.currentTarget.querySelector('i').className = `fas fa-eye${modelData.model.visible ? '' : '-slash'}`;
                     setStatus(`${modelData.fileName} ${modelData.model.visible ? 'shown' : 'hidden'}`);
                 }
             });
@@ -1563,6 +1649,7 @@
                 .forEach(({ model }) => {
                     model.visible = !allVisible;
                 });
+            updateTreeViewNodes(); // Update visibility icons
             setStatus(`All models ${allVisible ? 'hidden' : 'shown'}`);
         });
 
@@ -1577,9 +1664,9 @@
             updateModelName();
             updateObjectCount();
             updateTreeViewNodes();
+            treeView.clear();
             setStatus('All models removed');
             splashScreen.classList.remove('hidden');
-            treeView.clear();
         });
     }
 
